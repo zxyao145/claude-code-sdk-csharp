@@ -152,6 +152,13 @@ internal class SubprocessCliTransport : ITransport
             if (data != null)
             {
                 yield return data;
+                
+                // Check if this is a result message, which indicates the end of the conversation
+                if (data.TryGetValue("type", out var typeValue) && 
+                    typeValue?.ToString() == "result")
+                {
+                    break;
+                }
             }
         }
     }
@@ -224,10 +231,8 @@ internal class SubprocessCliTransport : ITransport
     {
         var startInfo = CreateBaseStartInfo(fileName, arguments);
 
-        var environmentVariables = new Dictionary<string, string?>
-        {
-            { "CLAUDE_CODE_ENTRYPOINT", "sdk-csharp" }
-        };
+        var environmentVariables = _options.EnvironmentVariables ?? new Dictionary<string, string?>();
+        environmentVariables["CLAUDE_CODE_ENTRYPOINT"] = "sdk-csharp";
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {

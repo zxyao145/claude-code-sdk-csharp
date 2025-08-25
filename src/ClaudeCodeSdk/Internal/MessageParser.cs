@@ -23,13 +23,6 @@ internal static class MessageParser
     /// <exception cref="MessageParseException">If parsing fails or message type is unrecognized</exception>
     public static IMessage ParseMessage(Dictionary<string, object> dataDict, ILogger? logger = null)
     {
-        var messageType = (string)dataDict["type"];
-        if (string.IsNullOrEmpty(messageType))
-        {
-            throw new MessageParseException("Message 'type' field is null or empty", dataDict);
-        }
-
-
         var data = JsonSerializer.SerializeToElement(dataDict, JsonOptions);
         if (data.ValueKind != JsonValueKind.Object)
         {
@@ -37,6 +30,18 @@ internal static class MessageParser
                 $"Invalid message data type (expected Object, got {data.ValueKind})",
                 data);
         }
+
+        if (!data.TryGetProperty("type", out JsonElement messageTypeEle))
+        {
+            throw new MessageParseException("Message 'type' field is not found", data);
+        }
+
+        var messageType = messageTypeEle.GetString();
+        if (string.IsNullOrEmpty(messageType))
+        {
+            throw new MessageParseException("Message 'type' field is null or empty", dataDict);
+        }
+
 
         return messageType switch
         {
