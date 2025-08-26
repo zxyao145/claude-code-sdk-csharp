@@ -29,12 +29,12 @@ public record ClaudeCodeOptions
 
 
     /// <summary>
-    /// ANTHROPIC_AUTH_TOKEN
+    /// ANTHROPIC_AUTH_TOKEN, and it will override the value in EnvironmentVariables if set.
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// ANTHROPIC_BASE_URL
+    /// ANTHROPIC_BASE_URL, and it will override the value in EnvironmentVariables if set.
     /// </summary>
     public string BaseUrl { get; set; } = string.Empty;
 

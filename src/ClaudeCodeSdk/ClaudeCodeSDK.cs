@@ -37,8 +37,8 @@ public static class ClaudeCodeSDK
     /// </summary>
     /// <param name="options">Optional configuration</param>
     /// <returns>New ClaudeSDKClient instance</returns>
-    public static ClaudeSDKClient CreateClient(ClaudeCodeOptions? options = null)
+    public static ClaudeSdkClient CreateClient(ClaudeCodeOptions? options = null)
     {
-        return new ClaudeSDKClient(options);
+        return new ClaudeSdkClient(options);
     }
 }

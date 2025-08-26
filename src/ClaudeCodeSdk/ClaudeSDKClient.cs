@@ -7,7 +7,7 @@ using ClaudeCodeSdk.Internal;
 
 namespace ClaudeCodeSdk;
 
-public class ClaudeSDKClient : IAsyncDisposable
+public class ClaudeSdkClient : IAsyncDisposable
 {
     private readonly ClaudeCodeOptions _options;
     private readonly ILogger? _logger;
@@ -19,7 +19,7 @@ public class ClaudeSDKClient : IAsyncDisposable
     /// </summary>
     /// <param name="options">Optional configuration (defaults to ClaudeCodeOptions() if null)</param>
     /// <param name="logger">Optional logger for debugging</param>
-    public ClaudeSDKClient(ClaudeCodeOptions? options = null, ILogger? logger = null)
+    public ClaudeSdkClient(ClaudeCodeOptions? options = null, ILogger? logger = null)
     {
         _options = options ?? new ClaudeCodeOptions();
         _logger = logger;
@@ -31,7 +31,7 @@ public class ClaudeSDKClient : IAsyncDisposable
     /// </summary>
     /// <param name="prompt">Optional prompt string or async enumerable of messages</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task ConnectAsync(object? prompt = null, Dictionary<string, string?>? environmentVariables = null, CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(object? prompt = null, CancellationToken cancellationToken = default)
     {
         if (_transport != null)
             throw new CLIConnectionException("Already connected. Call DisconnectAsync() first.");

@@ -21,6 +21,9 @@ public static class StreamingExamples
     {
         Console.WriteLine("=== Streaming Mode Example ===");
 
+        var options = new ClaudeCodeOptions();
+        options.EnvironmentVariables = EnvUtil.CreateEnv();
+
         // Create async enumerable of messages
         var messages = CreateMessageStream();
 
@@ -61,8 +64,9 @@ public static class StreamingExamples
             SystemPrompt = "You are a helpful assistant. Keep your responses concise.",
             MaxTurns = 10
         };
+        options.EnvironmentVariables = EnvUtil.CreateEnv();
 
-        await using var client = new ClaudeSDKClient(options);
+        await using var client = new ClaudeSdkClient(options);
         await client.ConnectAsync();
 
         while (true)
