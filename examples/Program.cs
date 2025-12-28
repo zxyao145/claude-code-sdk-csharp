@@ -7,7 +7,7 @@ try
 {
 
     // Run quick start examples
-    await QuickStartExamples.Main(args);
+    //await QuickStartExamples.Main(args);
     
     // Run streaming examples  
     await StreamingExamples.Main(args);

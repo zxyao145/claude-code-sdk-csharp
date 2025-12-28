@@ -12,8 +12,8 @@ internal static class EnvUtil
     {
         //return new Dictionary<string, string?>()
         //{
-        //    {"ANTHROPIC_AUTH_TOKEN", "sk-xxx" },
-        //    {"ANTHROPIC_BASE_URL", "xxx" },
+        //     {"ANTHROPIC_AUTH_TOKEN", "" },
+        //    {"ANTHROPIC_BASE_URL", "" },
         //};
 
         return new Dictionary<string, string?>();

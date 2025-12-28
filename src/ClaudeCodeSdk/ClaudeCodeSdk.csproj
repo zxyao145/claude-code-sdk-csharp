@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
+	<TargetFramework>net10.0</TargetFramework>
+	<LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>ClaudeCodeSdk</PackageId>
-    <PackageVersion>0.0.1</PackageVersion>
+    <PackageVersion>0.10.0</PackageVersion>
     <Title>Claude Code SDK for .NET</Title>
     <Authors>zxyao</Authors>
     <Description>.NET SDK for Claude Code</Description>
@@ -16,6 +16,8 @@
     <RepositoryUrl>https://github.com/zxyao145/claude-code-sdk-csharp</RepositoryUrl>
     <PackageTags>claude;ai;sdk;anthropic</PackageTags>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+	<IncludeSymbols>true</IncludeSymbols>
+	 <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>

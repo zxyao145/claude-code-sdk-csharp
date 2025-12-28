@@ -2,6 +2,7 @@ using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 
 namespace ClaudeCodeSdk.Internal.Transport;
@@ -39,14 +40,13 @@ internal class SubprocessCliTransport : ITransport
         if (_process != null)
             throw new CLIConnectionException("Already connected");
 
-        var cliPath = await FindClaudeCliAsync(cancellationToken);
         var args = CommandUtil.BuildCommand(_options, true, "");
 
-        _logger?.LogDebug("Starting Claude CLI process: {CliPath} {Args}", cliPath, string.Join(" ", args));
+        _logger?.LogDebug("Starting Claude CLI process: {CliPath} {Args}", _cliPath, string.Join(" ", args));
 
         _process = new Process
         {
-            StartInfo = CreateStartInfo(cliPath, string.Join(" ", args)),
+            StartInfo = CreateStartInfo(_cliPath, string.Join(" ", args)),
         };
 
         try
@@ -229,18 +229,18 @@ internal class SubprocessCliTransport : ITransport
 
     private ProcessStartInfo CreateStartInfo(string fileName, string arguments)
     {
-        var startInfo = CreateBaseStartInfo(fileName, arguments);
+        var startInfo = CreateBaseStartInfo(fileName, arguments, _options.WorkingDirectory);
 
         var environmentVariables = _options.EnvironmentVariables ?? new Dictionary<string, string?>();
         environmentVariables["CLAUDE_CODE_ENTRYPOINT"] = "sdk-csharp";
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
-            environmentVariables.Add("ANTHROPIC_AUTH_TOKEN", _options.ApiKey);
+            environmentVariables["ANTHROPIC_AUTH_TOKEN"] = _options.ApiKey;
         }
         if (!string.IsNullOrWhiteSpace(_options.BaseUrl))
         {
-            environmentVariables.Add("ANTHROPIC_BASE_URL", _options.BaseUrl);
+            environmentVariables["ANTHROPIC_BASE_URL"] = _options.BaseUrl;
         }
 
         // Set environment variables
@@ -259,62 +259,25 @@ internal class SubprocessCliTransport : ITransport
         return startInfo;
     }
 
-    private static ProcessStartInfo CreateBaseStartInfo(string fileName, string arguments)
+    private static ProcessStartInfo CreateBaseStartInfo(string fileName, 
+        string arguments, 
+        string? workingDirectory = null)
     {
+        workingDirectory ??= Directory.GetCurrentDirectory();
         var startInfo = new ProcessStartInfo
         {
             FileName = CommandUtil.GetOptimallyQualifiedTargetFilePath(fileName),
             Arguments = arguments,
-            WorkingDirectory = Directory.GetCurrentDirectory(),
+            WorkingDirectory = workingDirectory,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
         return startInfo;
-    }
-
-    private static async Task<string> FindClaudeCliAsync(CancellationToken cancellationToken)
-    {
-        var candidates = new[]
-        {
-            "claude",
-            "claude-code",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "claude-code.cmd"),
-            Path.Combine("/usr", "local", "bin", "claude-code"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "npm-cache", "_npx", "claude-code")
-        };
-
-        foreach (var candidate in candidates)
-        {
-            try
-            {
-                var testProcess = new Process
-                {
-                    StartInfo = CreateBaseStartInfo(candidate, "--version")
-                };
-                var npmBin = Environment.ExpandEnvironmentVariables(@"%AppData%\npm");
-                testProcess.StartInfo.EnvironmentVariables["PATH"] += ";" + npmBin;
-
-                var env = testProcess.StartInfo.EnvironmentVariables["PATH"];
-
-                testProcess.Start();
-                await testProcess.WaitForExitAsync(cancellationToken);
-
-                if (testProcess.ExitCode == 0)
-                {
-                    return candidate;
-                }
-            }
-            catch (Exception e)
-            {
-                System.Console.WriteLine($"Error testing candidate '{candidate}': {e.Message}");
-                // Try next candidate
-            }
-        }
-
-        throw new CLINotFoundException("Claude Code CLI not found. Please install it with: npm install -g @anthropic-ai/claude-code");
     }
 
     private static string FindClaudeCli()
@@ -343,6 +306,13 @@ internal class SubprocessCliTransport : ITransport
             if (File.Exists(path))
             {
                 return path;
+            }
+            if (OperatingSystem.IsWindows())
+            {
+                if (File.Exists(path + ".exe"))
+                {
+                    return path + ".exe";
+                }
             }
         }
 

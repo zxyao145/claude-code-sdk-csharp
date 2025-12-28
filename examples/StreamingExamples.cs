@@ -10,7 +10,7 @@ public static class StreamingExamples
 {
     public static async Task Main(string[] args)
     {
-        await StreamingModeExample();
+        //await StreamingModeExample();
         await InteractiveStreamingExample();
     }
 
@@ -61,8 +61,9 @@ public static class StreamingExamples
 
         var options = new ClaudeCodeOptions
         {
-            SystemPrompt = "You are a helpful assistant. Keep your responses concise.",
-            MaxTurns = 10
+            //SystemPrompt = "You are a helpful assistant. Keep your responses concise.",
+            MaxTurns = 10,
+            WorkingDirectory = "D:\\source\\repos\\claude-code-sdk-csharp"
         };
         options.EnvironmentVariables = EnvUtil.CreateEnv();
 
