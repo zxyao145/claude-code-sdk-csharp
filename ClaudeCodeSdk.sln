@@ -1,12 +1,14 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11222.16 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClaudeCodeSdk", "src\ClaudeCodeSdk\ClaudeCodeSdk.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClaudeCodeSdk.Examples", "examples\ClaudeCodeSdk.Examples.csproj", "{B2C3D4E5-F678-90AB-CDEF-123456789ABC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClaudeCodeSdk.Tests", "tests\ClaudeCodeSdk.Tests.csproj", "{C3D4E5F6-7890-ABCD-EF12-3456789ABCDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClaudeCodeSdk.MAF", "src\ClaudeCodeSdk.MAF\ClaudeCodeSdk.MAF.csproj", "{BBBD9F82-60DE-4106-B3E6-21294E26696E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,5 +28,12 @@ Global
 		{C3D4E5F6-7890-ABCD-EF12-3456789ABCDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3D4E5F6-7890-ABCD-EF12-3456789ABCDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3D4E5F6-7890-ABCD-EF12-3456789ABCDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBBD9F82-60DE-4106-B3E6-21294E26696E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBD9F82-60DE-4106-B3E6-21294E26696E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBD9F82-60DE-4106-B3E6-21294E26696E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBD9F82-60DE-4106-B3E6-21294E26696E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 EndGlobal
