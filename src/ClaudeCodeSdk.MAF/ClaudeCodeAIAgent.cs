@@ -181,17 +181,75 @@ public class ClaudeCodeAIAgent : AIAgent
     {
         if (claudeMessage is AssistantMessage assistantMsg)
         {
-            var textContent = ExtractTextFromAssistantMessage(assistantMsg);
-            if (!string.IsNullOrEmpty(textContent))
+            if (assistantMsg.Content.Count > 0)
             {
-                return new AgentRunResponseUpdate
+                var res = new AgentRunResponseUpdate
                 {
                     Role = ChatRole.Assistant,
-                    Contents = [new TextContent(textContent)],
                     ResponseId = Guid.NewGuid().ToString(),
-                    MessageId = Guid.NewGuid().ToString()
+                    MessageId = Guid.NewGuid().ToString(),
+                    AuthorName = assistantMsg.Model,
                 };
+                ConvertContent(assistantMsg.Content, res);
+                return res;
             }
+        }
+
+        if (claudeMessage is SystemMessage systemMessage)
+        {
+            return new AgentRunResponseUpdate
+            {
+                Role = ChatRole.System,
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    { "subtype" , systemMessage.Subtype}
+                },
+                Contents = [new TextContent($"[{JsonUtil.Serialize(systemMessage.Data)}")],
+                ResponseId = Guid.NewGuid().ToString(),
+                MessageId = Guid.NewGuid().ToString()
+            };
+        }
+
+        if (claudeMessage is UserMessage userMessage)
+        {
+            var res = new AgentRunResponseUpdate
+            {
+                Role = ChatRole.User,
+                ResponseId = Guid.NewGuid().ToString(),
+                MessageId = Guid.NewGuid().ToString()
+            };
+
+            // Handle Content which can be string or List<IContentBlock>
+            if (userMessage.Content is string str)
+            {
+                res.Contents = [new TextContent($"{str}")];
+            }
+            else if (userMessage.Content is IEnumerable<IContentBlock> blocks)
+            {
+                ConvertContent(blocks, res);
+            }
+            else
+            {
+                res.Contents = [new TextContent($"{userMessage.Content?.ToString() ?? string.Empty}")];
+            }
+
+            return res;
+        }
+
+        if (claudeMessage is ResultMessage resultMessage)
+        {
+            return new AgentRunResponseUpdate
+            {
+                Role = ChatRole.System,
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    { "type", "result" },
+                    { "subtype", resultMessage.Subtype },
+                },
+                Contents = [new TextContent($"{JsonUtil.Serialize(resultMessage)}")],
+                ResponseId = Guid.NewGuid().ToString(),
+                MessageId = Guid.NewGuid().ToString()
+            };
         }
 
         return null;
@@ -210,11 +268,49 @@ public class ClaudeCodeAIAgent : AIAgent
             else if (content is ThinkingBlock thinkingBlock)
             {
                 // Optionally include thinking content
-                // textParts.Add($"[Thinking: {thinkingBlock.Thinking}]");
+                textParts.Add($"Thinking: {thinkingBlock.Thinking}");
             }
         }
 
-        return string.Join("\n", textParts);
+        return JsonUtil.Serialize(textParts);
+        //return string.Join("\n", textParts);
+    }
+
+    private static void ConvertContent(IEnumerable<IContentBlock> contents, AgentRunResponseUpdate result)
+    {
+        var aiContents = new List<AIContent>();
+        result.Contents = aiContents;
+
+        foreach (var item in contents)
+        {
+            if (item is TextBlock textBlock)
+            {
+                aiContents.Add(
+                    new TextContent($"{textBlock.Text}")
+                );
+            }
+
+            if (item is ThinkingBlock thinkingBlock)
+            {
+                aiContents.Add(
+                    new TextContent($"{"Thinking: " + thinkingBlock.Thinking}")
+                );
+            }
+
+            if (item is ToolUseBlock toolUseBlock)
+            {
+                aiContents.Add(
+                    new TextContent($"{"Using Tool:" + toolUseBlock.Name}")
+                );
+            }
+
+            if (item is ToolResultBlock toolResultBlock)
+            {
+                aiContents.Add(
+                    new TextContent($"{$"Using Result:" + toolResultBlock.Content}")
+                );
+            }
+        }
     }
 
     private ClaudeCodeOptions PrepareOptionsWithThread(ClaudeCodeAgentThread thread, IEnumerable<ChatMessage> messages)
