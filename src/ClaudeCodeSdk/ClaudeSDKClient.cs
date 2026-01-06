@@ -1,9 +1,7 @@
-using System.Runtime.CompilerServices;
-using Microsoft.Extensions.Logging;
-using ClaudeCodeSdk.Types;
-using ClaudeCodeSdk.Exceptions;
-using ClaudeCodeSdk.Internal.Transport;
 using ClaudeCodeSdk.Internal;
+using ClaudeCodeSdk.Internal.Transport;
+using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 
 namespace ClaudeCodeSdk;
 

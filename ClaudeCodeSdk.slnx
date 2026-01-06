@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/solution/">
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="examples/ClaudeCodeSdk.Examples.csproj" />
+  <Project Path="src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj" />
+  <Project Path="src/ClaudeCodeSdk/ClaudeCodeSdk.csproj" />
+  <Project Path="tests/ClaudeCodeSdk.Tests.csproj" />
+</Solution>

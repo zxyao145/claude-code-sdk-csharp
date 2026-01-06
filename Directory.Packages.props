@@ -1,0 +1,25 @@
+<Project>
+	<PropertyGroup>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageVersion Include="ClaudeCodeSdk" Version="$(PackageVersion)" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.1" />
+		<PackageVersion Include="Microsoft.Agents.AI" Version="1.0.0-preview.251219.1" />
+		<PackageVersion Include="Microsoft.Extensions.AI" Version="10.1.1" />
+	</ItemGroup>
+	<!--utest-->
+	<ItemGroup>
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+		<PackageVersion Include="xunit" Version="2.4.2" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="2.4.5">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageVersion>
+		<PackageVersion Include="coverlet.collector" Version="6.0.0">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageVersion>
+		<PackageVersion Include="Moq" Version="4.20.70" />
+	</ItemGroup>
+</Project>
