@@ -60,7 +60,12 @@ public class ClaudeCodeAIAgent : AIAgent
 
     public override AgentThread GetNewThread()
     {
-        return new ClaudeCodeAgentThread();
+        return NewThread();
+    }
+
+    private ClaudeCodeAgentThread NewThread()
+    {
+        return new ClaudeCodeAgentThread(sessionId: _options.Resume);
     }
 
     public override async Task<AgentRunResponse> RunAsync(
@@ -70,10 +75,10 @@ public class ClaudeCodeAIAgent : AIAgent
         CancellationToken cancellationToken = default
         )
     {
-        var claudeThread = thread as ClaudeCodeAgentThread ?? new ClaudeCodeAgentThread();
+        var claudeThread = thread as ClaudeCodeAgentThread ?? NewThread();
         var messagesList = messages.ToList();
         var clientOptions = PrepareOptionsWithThread(claudeThread, messagesList);
-        var client = new ClaudeSdkClient(clientOptions, _logger);
+        await using var client = new ClaudeSdkClient(clientOptions, _logger);
 
         try
         {
@@ -128,10 +133,10 @@ public class ClaudeCodeAIAgent : AIAgent
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var claudeThread = thread as ClaudeCodeAgentThread ?? new ClaudeCodeAgentThread();
+        var claudeThread = thread as ClaudeCodeAgentThread ?? NewThread();
         var messagesList = messages.ToList();
         var clientOptions = PrepareOptionsWithThread(claudeThread, messagesList);
-        var client = new ClaudeSdkClient(clientOptions, _logger);
+        await using var client = new ClaudeSdkClient(clientOptions, _logger);
 
         try
         {
@@ -169,7 +174,7 @@ public class ClaudeCodeAIAgent : AIAgent
                     }
                 }
             }
-        }
+        } 
         finally
         {
             await client.DisconnectAsync(cancellationToken);
@@ -179,20 +184,18 @@ public class ClaudeCodeAIAgent : AIAgent
 
     private AgentRunResponseUpdate? ConvertToAgentRunResponseUpdate(IMessage claudeMessage)
     {
-        if (claudeMessage is AssistantMessage assistantMsg)
+        if (claudeMessage is AssistantMessage assistantMsg
+            && assistantMsg.Content.Count > 0)
         {
-            if (assistantMsg.Content.Count > 0)
+            var res = new AgentRunResponseUpdate
             {
-                var res = new AgentRunResponseUpdate
-                {
-                    Role = ChatRole.Assistant,
-                    ResponseId = Guid.NewGuid().ToString(),
-                    MessageId = Guid.NewGuid().ToString(),
-                    AuthorName = assistantMsg.Model,
-                };
-                ConvertContent(assistantMsg.Content, res);
-                return res;
-            }
+                Role = ChatRole.Assistant,
+                ResponseId = Guid.NewGuid().ToString(),
+                MessageId = Guid.NewGuid().ToString(),
+                AuthorName = assistantMsg.Model,
+            };
+            ConvertContent(assistantMsg.Content, res);
+            return res;
         }
 
         if (claudeMessage is SystemMessage systemMessage)
@@ -273,7 +276,7 @@ public class ClaudeCodeAIAgent : AIAgent
         }
 
         return JsonUtil.Serialize(textParts);
-        //return string.Join("\n", textParts);
+        // return string.Join("\n", textParts);
     }
 
     private static void ConvertContent(IEnumerable<IContentBlock> contents, AgentRunResponseUpdate result)
