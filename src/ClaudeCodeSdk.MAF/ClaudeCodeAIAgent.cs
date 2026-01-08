@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Runtime.CompilerServices;
 using ClaudeCodeSdk.Types;
 using Microsoft.Extensions.Logging;
+using ClaudeCodeSdk.Utils;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -141,7 +142,7 @@ public class ClaudeCodeAIAgent : AIAgent
         }
         finally
         {
-            await client.DisconnectAsync(cancellationToken);
+            await client.DisconnectAsync();
             await client.DisposeAsync();
         }
     }

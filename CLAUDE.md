@@ -30,22 +30,24 @@ dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
 ## Architecture Overview
 
 ### Core SDK Structure
-The SDK implements a dual-pattern architecture for Claude Code interactions:
+The SDK implements a simplified dual-pattern architecture for Claude Code interactions:
 
 1. **One-shot Queries** (`ClaudeQuery.QueryAsync`)
    - Fire-and-forget pattern for simple queries
    - Streams responses as `IAsyncEnumerable<IMessage>`
    - Automatically handles connection lifecycle
 
-2. **Interactive Client** (`ClaudeSDKClient`)
+2. **Interactive Client** (`ClaudeSdkClient`)
    - Long-lived bidirectional communication
-   - Session management and interrupt support  
+   - Session management and interrupt support
    - Manual connection control via `ConnectAsync/DisconnectAsync`
 
-### Transport Layer
-- `SubprocessCliTransport` handles subprocess communication with Claude Code CLI
-- JSON-based message protocol with strongly-typed parsing via `MessageParser`
-- Automatic CLI discovery and process lifecycle management
+### Unified Core Layer
+- **`ClaudeProcess`** - Single unified process manager (replaces ITransport abstraction)
+  - Direct subprocess communication with Claude Code CLI
+  - JSON-based message protocol with strongly-typed parsing
+  - Automatic CLI discovery and process lifecycle management
+  - Shared by both ClaudeQuery and ClaudeSdkClient
 
 ### Message System
 Hierarchical message types implementing `IMessage`:
@@ -96,6 +98,51 @@ Tests are organized by component in `tests/` folder:
 Examples in `examples/` demonstrate real-world usage patterns including tool integration and streaming scenarios.
 
 ## Checkpoint 记录
+
+**项目**: Claude Code SDK for C# | **时间**: 2026-01-08T15:25:20Z
+**里程碑**: v0.10.0 架构简化重构完成 | **分支**: main
+
+### 📊 技术状态
+- **代码质量**: 优秀 (22个核心文件, -3文件)
+- **架构健康**: 重构完成 - 移除过度抽象，统一核心实现
+- **依赖状态**: 最新 (.NET 10.0)
+
+### 📋 文档维护
+- [x] **README.md**: 保持最新 (2026-01-05)
+- [x] **配置同步**: 已同步
+- [x] **CLAUDE.md**: 已更新架构说明
+- [x] **API文档**: 完整
+
+### 🎯 期间活动 (2026-01-05 → 2026-01-08, 3天)
+- **提交数量**: 6个提交
+- **主要变更**: 架构重构 - 简化核心层，移除不必要抽象
+- **活动强度**: 高 - 重大架构优化
+- **发展趋势**: ⬆️上升 - 代码质量和可维护性提升
+
+### 🔧 本次重构详情
+- **目标**: 简化过度设计的抽象层
+- **实施**:
+  - 创建统一的 `ClaudeProcess` 核心类（301行）
+  - 移除 `ITransport` 接口（只有1个实现）
+  - 移除 `InternalClient` 薄包装层（39行）
+  - 移除 `Internal/` 命名空间隔离
+  - `MessageParser` 移至主命名空间
+- **成果**:
+  - 代码量: ~1,569行 → ~1,472行 (-97行, -6.2%)
+  - 文件数: 25个 → 22个 (-3文件)
+  - 层级: 3层 → 2层（更清晰直接）
+  - 测试: 15个测试全部通过 ✅
+
+### 💡 建议行动
+1. 考虑更新 README.md 添加架构简化说明
+2. 准备发布 v0.10.1 包含架构优化
+3. 继续完善 MAF 集成功能
+
+**Git提交**: `df96656` | **健康度**: 9.0/10
+
+---
+
+### 历史记录
 
 **项目**: Claude Code SDK for C# | **时间**: 2026-01-05T23:22:40+08:00
 **里程碑**: v0.10.0 MAF集成开发中 | **分支**: main

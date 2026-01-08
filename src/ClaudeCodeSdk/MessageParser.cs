@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
-namespace ClaudeCodeSdk.Internal;
+namespace ClaudeCodeSdk;
 
 /// <summary>
 /// Message parser for Claude Code SDK responses.

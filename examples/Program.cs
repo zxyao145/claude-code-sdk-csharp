@@ -6,9 +6,9 @@ Console.WriteLine("===================================");
 try
 {
 
-    // Run quick start examples
-    //await QuickStartExamples.Main(args);
-    
+    // sRun quick start examples
+    await QuickStartExamples.Main(args);
+
     // Run streaming examples  
     await StreamingExamples.Main(args);
 }

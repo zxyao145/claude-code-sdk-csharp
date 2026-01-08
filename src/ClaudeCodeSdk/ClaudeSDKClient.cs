@@ -1,19 +1,21 @@
-using ClaudeCodeSdk.Internal;
-using ClaudeCodeSdk.Internal.Transport;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 
 namespace ClaudeCodeSdk;
 
+/// <summary>
+/// Client for interactive Claude Code sessions with manual connection lifecycle control.
+/// Supports bidirectional communication, session management, and process interruption.
+/// </summary>
 public class ClaudeSdkClient : IAsyncDisposable
 {
     private readonly ClaudeCodeOptions _options;
     private readonly ILogger? _logger;
-    private ITransport? _transport;
+    private ClaudeProcess? _process;
     private bool _disposed;
 
     /// <summary>
-    /// Initialize Claude SDK client.
+    /// Initialize Claude SDK client for interactive sessions.
     /// </summary>
     /// <param name="options">Optional configuration (defaults to ClaudeCodeOptions() if null)</param>
     /// <param name="logger">Optional logger for debugging</param>
@@ -21,51 +23,47 @@ public class ClaudeSdkClient : IAsyncDisposable
     {
         _options = options ?? new ClaudeCodeOptions();
         _logger = logger;
-        Environment.SetEnvironmentVariable("CLAUDE_CODE_ENTRYPOINT", "sdk-csharp-client");
     }
 
     /// <summary>
-    /// Connect to Claude with a prompt or message stream.
+    /// Connect to Claude with an optional initial prompt.
     /// </summary>
     /// <param name="prompt">Optional prompt string or async enumerable of messages</param>
     /// <param name="cancellationToken">Cancellation token</param>
     public async Task ConnectAsync(object? prompt = null, CancellationToken cancellationToken = default)
     {
-        if (_transport != null)
+        if (_process != null)
             throw new CLIConnectionException("Already connected. Call DisconnectAsync() first.");
 
-        // Auto-connect with empty async iterable if no prompt is provided
-        object actualPrompt = prompt ?? CreateEmptyStream();
-
-        _transport = new SubprocessCliTransport(actualPrompt, _options, null, _logger);
-        await _transport.ConnectAsync(cancellationToken);
+        _process = new ClaudeProcess(_options, null, _logger);
+        await _process.StartAsync(prompt ?? CreateEmptyStream(), cancellationToken);
     }
 
     /// <summary>
-    /// Receive all messages from Claude.
+    /// Receive all messages from Claude as a continuous stream.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Async enumerable of messages</returns>
+    /// <returns>Async enumerable of parsed messages</returns>
     public async IAsyncEnumerable<IMessage> ReceiveMessagesAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        if (_transport == null)
+        if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
 
-        await foreach (var data in _transport.ReceiveMessagesAsync(cancellationToken))
+        await foreach (var data in _process.ReceiveAsync(cancellationToken))
         {
             yield return MessageParser.ParseMessage(data, _logger);
         }
     }
 
     /// <summary>
-    /// Send a new request in streaming mode.
+    /// Send a new query in the current session.
     /// </summary>
     /// <param name="prompt">String message or async enumerable of message dictionaries</param>
     /// <param name="sessionId">Session identifier for the conversation</param>
     /// <param name="cancellationToken">Cancellation token</param>
     public async Task QueryAsync(object prompt, string sessionId = "default", CancellationToken cancellationToken = default)
     {
-        if (_transport == null)
+        if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
 
         if (prompt is string stringPrompt)
@@ -82,7 +80,7 @@ public class ClaudeSdkClient : IAsyncDisposable
                 ["session_id"] = sessionId
             };
 
-            await _transport.SendRequestAsync(new[] { message }, new Dictionary<string, object> { ["session_id"] = sessionId }, cancellationToken);
+            await _process.SendAsync(new[] { message }, cancellationToken);
         }
         else if (prompt is IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable)
         {
@@ -90,41 +88,36 @@ public class ClaudeSdkClient : IAsyncDisposable
             await foreach (var msg in asyncEnumerable.WithCancellation(cancellationToken))
             {
                 if (!msg.ContainsKey("session_id"))
-                {
                     msg["session_id"] = sessionId;
-                }
                 messages.Add(msg);
             }
 
             if (messages.Count > 0)
-            {
-                await _transport.SendRequestAsync(messages, new Dictionary<string, object> { ["session_id"] = sessionId }, cancellationToken);
-            }
+                await _process.SendAsync(messages, cancellationToken);
         }
         else
         {
-            throw new ArgumentException("Prompt must be either a string or IAsyncEnumerable<Dictionary<string, object>>", nameof(prompt));
+            throw new ArgumentException(
+                "Prompt must be either a string or IAsyncEnumerable<Dictionary<string, object>>",
+                nameof(prompt));
         }
     }
 
     /// <summary>
-    /// Send interrupt signal (only works with streaming mode).
+    /// Send interrupt signal to immediately kill the CLI process.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     public async Task InterruptAsync(CancellationToken cancellationToken = default)
     {
-        if (_transport == null)
+        if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
-        
-        await _transport.InterruptAsync(cancellationToken);
+
+        await _process.InterruptAsync();
     }
 
     /// <summary>
-    /// Receive messages from Claude until and including a ResultMessage.
-    /// 
-    /// This async iterator yields all messages in sequence and automatically terminates
-    /// after yielding a ResultMessage (which indicates the response is complete).
-    /// It's a convenience method over ReceiveMessagesAsync() for single-response workflows.
+    /// Receive messages until and including a ResultMessage, then automatically terminate.
+    /// Convenience method for single-response workflows.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Async enumerable of messages ending with a ResultMessage</returns>
@@ -134,29 +127,24 @@ public class ClaudeSdkClient : IAsyncDisposable
         {
             yield return message;
             if (message is ResultMessage)
-            {
                 yield break;
-            }
         }
     }
 
     /// <summary>
-    /// Disconnect from Claude.
+    /// Disconnect from Claude and cleanup process resources.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    public async Task DisconnectAsync()
     {
-        if (_transport != null)
+        if (_process != null)
         {
-            await _transport.DisconnectAsync(cancellationToken);
-            await _transport.DisposeAsync();
-            _transport = null;
+            await _process.DisposeAsync();
+            _process = null;
         }
     }
 
     private static async IAsyncEnumerable<Dictionary<string, object>> CreateEmptyStream()
     {
-        // This creates an empty async enumerable that never yields but keeps the connection open
         await Task.CompletedTask;
         yield break;
     }

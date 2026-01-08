@@ -1,8 +1,9 @@
 ﻿using System.Text.Json;
 
-namespace ClaudeCodeSdk.MAF;
+namespace ClaudeCodeSdk.Utils;
 
-public static class JsonUtil
+
+internal static class JsonUtil
 {
     static JsonSerializerOptions OPTIONS;
     static JsonUtil()
