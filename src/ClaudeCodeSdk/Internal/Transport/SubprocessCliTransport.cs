@@ -132,6 +132,7 @@ internal class SubprocessCliTransport : ITransport
         while (!cancellationToken.IsCancellationRequested)
         {
             var line = await _stdout.ReadLineAsync(cancellationToken);
+            _logger?.LogDebug("ReadLineAsync:{0}", line);
             if (line == null)
                 break;
 
