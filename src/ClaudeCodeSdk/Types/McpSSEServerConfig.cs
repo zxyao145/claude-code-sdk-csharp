@@ -9,10 +9,10 @@ public record McpSSEServerConfig : IMcpServerConfig
 {
     [JsonPropertyName("type")]
     public string Type => "sse";
-    
+
     [JsonPropertyName("url")]
     public required string Url { get; init; }
-    
+
     [JsonPropertyName("headers")]
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
 }

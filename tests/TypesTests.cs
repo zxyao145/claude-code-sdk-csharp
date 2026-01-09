@@ -1,5 +1,5 @@
-using Xunit;
 using ClaudeCodeSdk.Types;
+using Xunit;
 
 namespace ClaudeCodeSdk.Tests;
 
@@ -16,12 +16,12 @@ public class TypesTests
     [Fact]
     public void ThinkingBlock_ShouldHaveCorrectType()
     {
-        var block = new ThinkingBlock 
-        { 
+        var block = new ThinkingBlock
+        {
             Thinking = "I need to think about this",
             Signature = "sig123"
         };
-        
+
         Assert.Equal("thinking", block.Type);
         Assert.Equal("I need to think about this", block.Thinking);
         Assert.Equal("sig123", block.Signature);
@@ -31,13 +31,13 @@ public class TypesTests
     public void ToolUseBlock_ShouldHaveCorrectType()
     {
         var input = new Dictionary<string, object> { ["param"] = "value" };
-        var block = new ToolUseBlock 
-        { 
+        var block = new ToolUseBlock
+        {
             Id = "tool1",
             Name = "TestTool",
             Input = input
         };
-        
+
         Assert.Equal("tool_use", block.Type);
         Assert.Equal("tool1", block.Id);
         Assert.Equal("TestTool", block.Name);
@@ -47,13 +47,13 @@ public class TypesTests
     [Fact]
     public void ToolResultBlock_ShouldHaveCorrectType()
     {
-        var block = new ToolResultBlock 
-        { 
+        var block = new ToolResultBlock
+        {
             ToolUseId = "tool1",
             Content = "Result content",
             IsError = false
         };
-        
+
         Assert.Equal("tool_result", block.Type);
         Assert.Equal("tool1", block.ToolUseId);
         Assert.Equal("Result content", block.Content);
@@ -71,17 +71,17 @@ public class TypesTests
     [Fact]
     public void AssistantMessage_ShouldHaveCorrectType()
     {
-        var content = new List<IContentBlock> 
-        { 
-            new TextBlock { Text = "Hello" } 
+        var content = new List<IContentBlock>
+        {
+            new TextBlock { Text = "Hello" }
         };
-        
-        var message = new AssistantMessage 
-        { 
+
+        var message = new AssistantMessage
+        {
             Content = content,
             Model = "claude-3"
         };
-        
+
         Assert.Equal("assistant", message.Type);
         Assert.Equal(content, message.Content);
         Assert.Equal("claude-3", message.Model);
@@ -91,12 +91,12 @@ public class TypesTests
     public void SystemMessage_ShouldHaveCorrectType()
     {
         var data = new Dictionary<string, object> { ["key"] = "value" };
-        var message = new SystemMessage 
-        { 
+        var message = new SystemMessage
+        {
             Subtype = "test",
             Data = data
         };
-        
+
         Assert.Equal("system", message.Type);
         Assert.Equal("test", message.Subtype);
         Assert.Equal(data, message.Data);
@@ -105,8 +105,8 @@ public class TypesTests
     [Fact]
     public void ResultMessage_ShouldHaveCorrectType()
     {
-        var message = new ResultMessage 
-        { 
+        var message = new ResultMessage
+        {
             Subtype = "completion",
             DurationMs = 1000,
             DurationApiMs = 800,
@@ -115,7 +115,7 @@ public class TypesTests
             SessionId = "session123",
             TotalCostUsd = 0.001
         };
-        
+
         Assert.Equal("result", message.Type);
         Assert.Equal("completion", message.Subtype);
         Assert.Equal(1000, message.DurationMs);
@@ -130,7 +130,7 @@ public class TypesTests
     public void ClaudeCodeOptions_ShouldHaveDefaults()
     {
         var options = new ClaudeCodeOptions();
-        
+
         Assert.Empty(options.AllowedTools);
         Assert.Equal(8000, options.MaxThinkingTokens);
         Assert.Null(options.SystemPrompt);

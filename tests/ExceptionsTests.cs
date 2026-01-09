@@ -1,5 +1,5 @@
-using Xunit;
 using ClaudeCodeSdk.Exceptions;
+using Xunit;
 
 namespace ClaudeCodeSdk.Tests;
 
@@ -45,7 +45,7 @@ public class ExceptionsTests
         var longLine = new string('a', 150);
         var originalError = new Exception("JSON error");
         var ex = new CLIJsonDecodeException(longLine, originalError);
-        
+
         Assert.Contains("...", ex.Message);
         Assert.Equal(longLine, ex.Line);
         Assert.Equal(originalError, ex.OriginalError);
@@ -56,7 +56,7 @@ public class ExceptionsTests
     {
         var data = new { type = "test", content = "data" };
         var ex = new MessageParseException("Parse failed", data);
-        
+
         Assert.Equal("Parse failed", ex.Message);
         Assert.Equal(data, ex.ExpData);
     }

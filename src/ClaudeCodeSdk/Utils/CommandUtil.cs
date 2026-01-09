@@ -75,7 +75,7 @@ internal class CommandUtil
 
     public static List<string> BuildCommand(
         ClaudeCodeOptions options,
-        bool isStreaming, 
+        bool isStreaming,
         string prompt)
     {
         var cmd = new List<string> { "--output-format", "stream-json", "--verbose" };
@@ -102,7 +102,7 @@ internal class CommandUtil
             cmd.AddRange(new[] { "--permission-prompt-tool", options.PermissionPromptToolName });
 
         if (options.PermissionMode != null)
-            cmd.AddRange(new[] { "--permission-mode", options.PermissionMode.ToString()?? "" });
+            cmd.AddRange(new[] { "--permission-mode", options.PermissionMode.ToString() ?? "" });
 
         if (options.ContinueConversation)
             cmd.Add("--continue");

@@ -58,7 +58,7 @@ public static class QuickStartExamples
 
         Console.WriteLine("Explain what C# is in one sentence.");
         await foreach (var message in ClaudeQuery.QueryAsync(
-            "Explain what C# is in one sentence.", 
+            "Explain what C# is in one sentence.",
             options))
         {
             if (message is AssistantMessage assistantMessage)
@@ -123,7 +123,7 @@ public static class QuickStartExamples
         options.EnvironmentVariables = EnvUtil.CreateEnv();
 
         await using var client = new ClaudeSdkClient(options);
-        
+
         // Connect and send initial message
         await client.ConnectAsync();
 
@@ -141,7 +141,7 @@ public static class QuickStartExamples
                     if (block is TextBlock textBlock)
                     {
                         Console.WriteLine($"Claude: {textBlock.Text}");
-                        
+
                         // Check if Claude is ready for the next step
                         if (textBlock.Text.Contains("ready", StringComparison.OrdinalIgnoreCase))
                         {
@@ -150,7 +150,7 @@ public static class QuickStartExamples
                     }
                 }
             }
-            
+
             if (message is ResultMessage)
                 break;
         }

@@ -1,10 +1,10 @@
-﻿using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
-using System.Text.Json;
-using System.Runtime.CompilerServices;
-using ClaudeCodeSdk.Types;
-using Microsoft.Extensions.Logging;
+﻿using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -100,7 +100,7 @@ public class ClaudeCodeAIAgent : AIAgent
                 if (message.Role == ChatRole.User)
                 {
                     var content = message.Text ?? string.Empty;
-                    if(claudeThread  != null)
+                    if (claudeThread != null)
                     {
                         await client.QueryAsync(content,
                             sessionId: claudeThread.SessionId,
@@ -131,7 +131,7 @@ public class ClaudeCodeAIAgent : AIAgent
                 }
             }
 
-           
+
 
             // Return complete response
             return new AgentRunResponse
@@ -344,7 +344,7 @@ public class ClaudeCodeAIAgent : AIAgent
     private ClaudeCodeOptions PrepareOptionsWithThread(ClaudeCodeAgentThread? thread, IEnumerable<ChatMessage> messages)
     {
         var options = _options;
-        
+
         // Extract system prompt from messages if present
         var systemMessage = messages.FirstOrDefault(m => m.Role == ChatRole.System);
         if (systemMessage != null)

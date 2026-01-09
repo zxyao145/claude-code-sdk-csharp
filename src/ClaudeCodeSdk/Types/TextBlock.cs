@@ -8,7 +8,7 @@ namespace ClaudeCodeSdk.Types;
 public record TextBlock : IContentBlock
 {
     public string Type => "text";
-    
+
     [JsonPropertyName("text")]
     public required string Text { get; init; }
 }

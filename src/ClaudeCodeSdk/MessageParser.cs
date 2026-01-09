@@ -65,7 +65,7 @@ internal static class MessageParser
             }
 
             object content;
-            
+
             if (contentElement.ValueKind == JsonValueKind.Array)
             {
                 var contentBlocks = new List<IContentBlock>();
@@ -117,8 +117,8 @@ internal static class MessageParser
                 contentBlocks.Add(ParseContentBlock(blockElement));
             }
 
-            return new AssistantMessage 
-            { 
+            return new AssistantMessage
+            {
                 Content = contentBlocks,
                 Model = modelElement.GetString()!
             };
@@ -185,26 +185,26 @@ internal static class MessageParser
         }
 
         var blockType = typeElement.GetString();
-        
+
         return blockType switch
         {
-            "text" => new TextBlock 
-            { 
-                Text = GetRequiredString(blockElement, "text") 
+            "text" => new TextBlock
+            {
+                Text = GetRequiredString(blockElement, "text")
             },
-            "thinking" => new ThinkingBlock 
-            { 
+            "thinking" => new ThinkingBlock
+            {
                 Thinking = GetRequiredString(blockElement, "thinking"),
                 Signature = GetRequiredString(blockElement, "signature")
             },
-            "tool_use" => new ToolUseBlock 
-            { 
+            "tool_use" => new ToolUseBlock
+            {
                 Id = GetRequiredString(blockElement, "id"),
                 Name = GetRequiredString(blockElement, "name"),
                 Input = GetRequiredDictionary(blockElement, "input")
             },
-            "tool_result" => new ToolResultBlock 
-            { 
+            "tool_result" => new ToolResultBlock
+            {
                 ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
                 Content = GetOptionalObject(blockElement, "content"),
                 IsError = GetOptionalBoolean(blockElement, "is_error")

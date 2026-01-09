@@ -1,5 +1,5 @@
-global using ClaudeCodeSdk.Types;
 global using ClaudeCodeSdk.Exceptions;
+global using ClaudeCodeSdk.Types;
 
 namespace ClaudeCodeSdk;
 

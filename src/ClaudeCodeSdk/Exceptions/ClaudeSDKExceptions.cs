@@ -30,7 +30,7 @@ public class CLINotFoundException : CLIConnectionException
 {
     public string? CliPath { get; }
 
-    public CLINotFoundException(string message = "Claude Code not found", string? cliPath = null) 
+    public CLINotFoundException(string message = "Claude Code not found", string? cliPath = null)
         : base(cliPath != null ? $"{message}: {cliPath}" : message)
     {
         CliPath = cliPath;
@@ -58,7 +58,7 @@ public class ProcessException : ClaudeSDKException
         {
             message = $"{message} (exit code: {exitCode})";
         }
-        
+
         if (!string.IsNullOrEmpty(stderr))
         {
             message = $"{message}\nError output: {stderr}";

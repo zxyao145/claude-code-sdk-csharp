@@ -74,7 +74,7 @@ public static class StreamingExamples
         {
             Console.Write("\nYou: ");
             var input = Console.ReadLine();
-            
+
             if (string.IsNullOrEmpty(input) || input.ToLower() == "exit")
                 break;
 
@@ -128,7 +128,7 @@ public static class StreamingExamples
             ["type"] = "user",
             ["message"] = new Dictionary<string, object>
             {
-                ["role"] = "user", 
+                ["role"] = "user",
                 ["content"] = "Can you help me with a math problem?"
             },
             ["parent_tool_use_id"] = null!,
