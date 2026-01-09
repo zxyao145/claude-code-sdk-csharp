@@ -64,7 +64,7 @@ public class TypesTests
     public void UserMessage_ShouldHaveCorrectType()
     {
         var message = new UserMessage { Content = "Hello" };
-        Assert.Equal("user", message.Type);
+        Assert.Equal("user", message.Type.Value);
         Assert.Equal("Hello", message.Content);
     }
 
@@ -79,12 +79,14 @@ public class TypesTests
         var message = new AssistantMessage
         {
             Content = content,
-            Model = "claude-3"
+            Model = "claude-3",
+            SessionId = "123"
         };
 
-        Assert.Equal("assistant", message.Type);
+        Assert.Equal("assistant", message.Type.Value);
         Assert.Equal(content, message.Content);
         Assert.Equal("claude-3", message.Model);
+        Assert.Equal("123", message.SessionId);
     }
 
     [Fact]
@@ -94,12 +96,14 @@ public class TypesTests
         var message = new SystemMessage
         {
             Subtype = "test",
-            Data = data
+            Data = data,
+            SessionId = "123"
         };
 
-        Assert.Equal("system", message.Type);
+        Assert.Equal("system", message.Type.Value);
         Assert.Equal("test", message.Subtype);
         Assert.Equal(data, message.Data);
+        Assert.Equal("123", message.SessionId);
     }
 
     [Fact]
@@ -116,7 +120,7 @@ public class TypesTests
             TotalCostUsd = 0.001
         };
 
-        Assert.Equal("result", message.Type);
+        Assert.Equal("result", message.Type.Value);
         Assert.Equal("completion", message.Subtype);
         Assert.Equal(1000, message.DurationMs);
         Assert.Equal(800, message.DurationApiMs);

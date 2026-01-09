@@ -7,7 +7,7 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record ResultMessage : IMessage
 {
-    public string Type => "result";
+    public MessageType Type => MessageType.Result;
 
     [JsonPropertyName("subtype")]
     public required string Subtype { get; init; }
@@ -31,7 +31,7 @@ public record ResultMessage : IMessage
     public double? TotalCostUsd { get; init; }
 
     [JsonPropertyName("usage")]
-    public Dictionary<string, object>? Usage { get; init; }
+    public Usage? Usage { get; init; }
 
     [JsonPropertyName("result")]
     public string? Result { get; init; }

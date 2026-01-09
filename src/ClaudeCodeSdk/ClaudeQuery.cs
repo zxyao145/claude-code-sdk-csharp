@@ -36,7 +36,7 @@ public static class ClaudeQuery
 
             await foreach (var data in process.ReceiveAsync(cancellationToken))
             {
-                yield return MessageParser.ParseMessage(data, logger);
+                yield return data;
             }
         }
     }

@@ -1,3 +1,4 @@
+using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -8,48 +9,63 @@ namespace ClaudeCodeSdk;
 /// </summary>
 internal static class MessageParser
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    public static IMessage? ParseMessage(string line, ILogger? logger = null)
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        PropertyNameCaseInsensitive = true
-    };
+        Dictionary<string, object>? data;
+        try
+        {
+            data = JsonUtil.Deserialize<Dictionary<string, object>>(line);
+        }
+        catch (JsonException ex)
+        {
+            logger?.LogError(ex, "JSON parse error: {Line}", line);
+            throw new CLIJsonDecodeException(line, ex);
+        }
+        if (data == null)
+        {
+            return null;
+        }
+        //var jsonElement = JsonSerializer.SerializeToElement(line, JsonUtil.SNAKECASELOWER_OPTIONS);
+        var jsonElement = JsonUtil.SnakeCaseSerializeToElement(data);
+
+        return ParseMessage(jsonElement, logger);
+    }
+
 
     /// <summary>
     /// Parse message from CLI output into typed Message objects.
     /// </summary>
-    /// <param name="data">Raw message dictionary from CLI output</param>
+    /// <param name="jsonElement">Raw message dictionary from CLI output</param>
     /// <param name="logger">Optional logger for debugging</param>
     /// <returns>Parsed Message object</returns>
     /// <exception cref="MessageParseException">If parsing fails or message type is unrecognized</exception>
-    public static IMessage ParseMessage(Dictionary<string, object> dataDict, ILogger? logger = null)
+    public static IMessage ParseMessage(JsonElement jsonElement, ILogger? logger = null)
     {
-        var data = JsonSerializer.SerializeToElement(dataDict, JsonOptions);
-        if (data.ValueKind != JsonValueKind.Object)
+        if (jsonElement.ValueKind != JsonValueKind.Object)
         {
             throw new MessageParseException(
-                $"Invalid message data type (expected Object, got {data.ValueKind})",
-                data);
+                $"Invalid message data type (expected Object, got {jsonElement.ValueKind})",
+                jsonElement);
         }
 
-        if (!data.TryGetProperty("type", out JsonElement messageTypeEle))
+        if (!jsonElement.TryGetProperty("type", out JsonElement messageTypeEle))
         {
-            throw new MessageParseException("Message 'type' field is not found", data);
+            throw new MessageParseException("Message 'type' field is not found", jsonElement);
         }
 
         var messageType = messageTypeEle.GetString();
-        if (string.IsNullOrEmpty(messageType))
+        if (string.IsNullOrWhiteSpace(messageType))
         {
-            throw new MessageParseException("Message 'type' field is null or empty", dataDict);
+            throw new MessageParseException("Message 'type' field is null or empty", jsonElement);
         }
-
 
         return messageType switch
         {
-            "user" => ParseUserMessage(data),
-            "assistant" => ParseAssistantMessage(data),
-            "system" => ParseSystemMessage(data),
-            "result" => ParseResultMessage(data),
-            _ => throw new MessageParseException($"Unknown message type: {messageType}", data)
+            "system" => ParseSystemMessage(jsonElement),
+            "assistant" => ParseAssistantMessage(jsonElement),
+            "user" => ParseUserMessage(jsonElement),
+            "result" => ParseResultMessage(jsonElement),
+            _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonElement)
         };
     }
 
@@ -111,6 +127,11 @@ internal static class MessageParser
                 throw new MessageParseException("Missing 'model' field in assistant message", data);
             }
 
+            if (!messageElement.TryGetProperty("session_id", out var sessionIdElement))
+            {
+                throw new MessageParseException("Missing 'session_id' field in assistant message", data);
+            }
+
             var contentBlocks = new List<IContentBlock>();
             foreach (var blockElement in contentElement.EnumerateArray())
             {
@@ -120,7 +141,8 @@ internal static class MessageParser
             return new AssistantMessage
             {
                 Content = contentBlocks,
-                Model = modelElement.GetString()!
+                Model = modelElement.GetString()!,
+                SessionId = sessionIdElement.GetString()!,
             };
         }
         catch (Exception ex) when (ex is not MessageParseException)
@@ -138,11 +160,18 @@ internal static class MessageParser
                 throw new MessageParseException("Missing 'subtype' field in system message", data);
             }
 
-            var dataDict = JsonSerializer.Deserialize<Dictionary<string, object>>(data.GetRawText(), JsonOptions)!;
+            if (!data.TryGetProperty("session_id", out var sessionIdElement))
+            {
+                throw new MessageParseException("Missing 'session_id' field in system message", data);
+            }
+
+            var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(data.GetRawText());
+            dataDict.Remove("subtype");
 
             return new SystemMessage
             {
                 Subtype = subtypeElement.GetString()!,
+                SessionId = sessionIdElement.GetString()!,
                 Data = dataDict
             };
         }
@@ -159,13 +188,13 @@ internal static class MessageParser
             var result = new ResultMessage
             {
                 Subtype = GetRequiredString(data, "subtype"),
-                DurationMs = GetRequiredInt32(data, "duration_ms"),
                 DurationApiMs = GetRequiredInt32(data, "duration_api_ms"),
+                DurationMs = GetRequiredInt32(data, "duration_ms"),
                 IsError = GetRequiredBoolean(data, "is_error"),
                 NumTurns = GetRequiredInt32(data, "num_turns"),
                 SessionId = GetRequiredString(data, "session_id"),
                 TotalCostUsd = GetOptionalDouble(data, "total_cost_usd"),
-                Usage = GetOptionalDictionary(data, "usage"),
+                Usage = GetOptionalUsage(data, "usage"),
                 Result = GetOptionalString(data, "result")
             };
 
@@ -259,7 +288,7 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return JsonSerializer.Deserialize<object>(prop.GetRawText(), JsonOptions);
+            return JsonUtil.SnakeCaseDeserialize<object>(prop.GetRawText());
         }
         return null;
     }
@@ -268,16 +297,16 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return JsonSerializer.Deserialize<Dictionary<string, object>>(prop.GetRawText(), JsonOptions)!;
+            return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
         }
         throw new MessageParseException($"Missing required property: {propertyName}", element);
     }
 
-    private static Dictionary<string, object>? GetOptionalDictionary(JsonElement element, string propertyName)
+    private static Usage? GetOptionalUsage(JsonElement element, string propertyName)
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return JsonSerializer.Deserialize<Dictionary<string, object>>(prop.GetRawText(), JsonOptions);
+            return prop.Deserialize<Usage>(JsonUtil.SNAKECASELOWER_OPTIONS);
         }
         return null;
     }

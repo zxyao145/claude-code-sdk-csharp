@@ -51,7 +51,7 @@ public class ClaudeSdkClient : IAsyncDisposable
 
         await foreach (var data in _process.ReceiveAsync(cancellationToken))
         {
-            yield return MessageParser.ParseMessage(data, _logger);
+            yield return data;
         }
     }
 

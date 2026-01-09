@@ -7,10 +7,13 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record SystemMessage : IMessage
 {
-    public string Type => "system";
+    public MessageType Type => MessageType.System;
 
     [JsonPropertyName("subtype")]
     public required string Subtype { get; init; }
+
+    [JsonPropertyName("session_id")]
+    public required string SessionId { get; init; }
 
     [JsonPropertyName("data")]
     public required Dictionary<string, object> Data { get; init; }

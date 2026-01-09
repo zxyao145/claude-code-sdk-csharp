@@ -119,18 +119,18 @@ internal class CommandUtil
                 cmd.AddRange(new[] { "--add-dir", dir.ToString() });
         }
 
-        //if (options.McpServers != null)
-        //{
-        //    if (options.McpServers is Dictionary<string, object> dict)
-        //    {
-        //        var json = JsonSerializer.Serialize(new { mcpServers = dict });
-        //        cmd.AddRange(new[] { "--mcp-config", json });
-        //    }
-        //    else
-        //    {
-        //        cmd.AddRange(new[] { "--mcp-config", options.McpServers.ToString() });
-        //    }
-        //}
+        if (options.McpServers != null)
+        {
+            if (options.McpServers is Dictionary<string, object> dict)
+            {
+                var json = JsonUtil.Serialize(new { mcpServers = dict });
+                cmd.AddRange(new[] { "--mcp-config", json });
+            }
+            else
+            {
+                cmd.AddRange(new[] { "--mcp-config", options.McpServers.ToString() ?? "" });
+            }
+        }
 
         if (options.ExtraArgs != null)
         {

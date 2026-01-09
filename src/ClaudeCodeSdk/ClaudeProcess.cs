@@ -72,6 +72,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         foreach (var message in messages)
         {
             var json = JsonUtil.Serialize(message);
+            _logger?.LogDebug("stdin WriteLine:{line}", json);
             await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
         }
 
@@ -82,7 +83,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     /// Receive messages from Claude as JSON dictionaries.
     /// Automatically terminates when receiving "result" type message.
     /// </summary>
-    public async IAsyncEnumerable<Dictionary<string, object>> ReceiveAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IMessage> ReceiveAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_stdout == null)
             throw new CLIConnectionException("Not connected");
@@ -90,30 +91,21 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             var line = await _stdout.ReadLineAsync(cancellationToken);
+            _logger?.LogDebug("stdout ReadLine from process stdout:{line}", line);
             if (line == null)
                 break;
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
-            Dictionary<string, object>? data;
-            try
+            var msg =  MessageParser.ParseMessage(line, _logger);
+            if (msg != null)
             {
-                data = JsonUtil.Deserialize<Dictionary<string, object>>(line);
-            }
-            catch (JsonException ex)
-            {
-                _logger?.LogError(ex, "JSON parse error: {Line}", line);
-                throw new CLIJsonDecodeException(line, ex);
-            }
-
-            if (data != null)
-            {
-                yield return data;
-
-                // Auto-terminate on result message
-                if (data.TryGetValue("type", out var typeValue) && typeValue?.ToString() == "result")
-                    break;
+                yield return msg;
+                if (msg.Type == MessageType.Result) 
+                { 
+                    break; 
+                }
             }
         }
     }
