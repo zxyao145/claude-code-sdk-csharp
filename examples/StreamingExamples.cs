@@ -10,7 +10,7 @@ public static class StreamingExamples
 {
     public static async Task Main(string[] args)
     {
-        //await StreamingModeExample();
+        await StreamingModeExample();
         await InteractiveStreamingExample();
     }
 
@@ -93,6 +93,10 @@ public static class StreamingExamples
                         else if (block is ToolUseBlock toolUse)
                         {
                             Console.WriteLine($"[Using tool: {toolUse.Name}]");
+                        }
+                        else if (block is ErrorContentBlock error)
+                        {
+                            Console.WriteLine($"[Error: {error.Message}]");
                         }
                     }
                 }

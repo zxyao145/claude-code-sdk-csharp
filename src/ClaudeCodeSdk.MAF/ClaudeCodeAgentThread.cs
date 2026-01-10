@@ -1,4 +1,5 @@
-﻿using Microsoft.Agents.AI;
+﻿using ClaudeCodeSdk.Types;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
 namespace ClaudeCodeSdk.MAF;
@@ -8,12 +9,30 @@ namespace ClaudeCodeSdk.MAF;
 /// </summary>
 internal class ClaudeCodeAgentThread : AgentThread
 {
-    public string SessionId { get; }
-    public List<ChatMessage> Messages { get; }
+    public string? SessionId { get; private set; }
 
-    public ClaudeCodeAgentThread(string? sessionId = null, List<ChatMessage>? messages = null)
+    public ClaudeCodeAgentThread(string? sessionId = null)
     {
-        SessionId = sessionId ?? Guid.NewGuid().ToString();
-        Messages = messages ?? new List<ChatMessage>();
+        SessionId = sessionId;
+    }
+
+    public void SetSessionIdIfNull(IMessage? claudeMessage)
+    {
+        if (claudeMessage == null)
+        {
+            return;
+        }
+        if (claudeMessage is SystemMessage systemMessage)
+        {
+            SetSessionIdIfNull(systemMessage.SessionId);
+        }
+    }
+
+    public void SetSessionIdIfNull(string sessionId)
+    {
+        if (SessionId == null)
+        {
+            SessionId = sessionId;
+        }
     }
 }

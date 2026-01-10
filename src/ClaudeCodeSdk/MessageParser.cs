@@ -127,10 +127,25 @@ internal static class MessageParser
                 throw new MessageParseException("Missing 'model' field in assistant message", data);
             }
 
-            if (!messageElement.TryGetProperty("session_id", out var sessionIdElement))
+            if (!data.TryGetProperty("session_id", out var sessionIdElement))
             {
                 throw new MessageParseException("Missing 'session_id' field in assistant message", data);
             }
+
+            if (data.TryGetProperty("error", out var errorElement))
+            {
+                var errorString = errorElement.GetString()!;
+                if (!string.IsNullOrWhiteSpace(errorString))
+                {
+                    return new AssistantMessage
+                    {
+                        Content = [new ErrorContentBlock(errorString)],
+                        Model = modelElement.GetString()!,
+                        SessionId = sessionIdElement.GetString()!,
+                    };
+                }
+            }
+
 
             var contentBlocks = new List<IContentBlock>();
             foreach (var blockElement in contentElement.EnumerateArray())
@@ -194,7 +209,7 @@ internal static class MessageParser
                 NumTurns = GetRequiredInt32(data, "num_turns"),
                 SessionId = GetRequiredString(data, "session_id"),
                 TotalCostUsd = GetOptionalDouble(data, "total_cost_usd"),
-                Usage = GetOptionalUsage(data, "usage"),
+                Usage = GetOptional<Usage>(data, "usage"),
                 Result = GetOptionalString(data, "result")
             };
 
@@ -302,12 +317,12 @@ internal static class MessageParser
         throw new MessageParseException($"Missing required property: {propertyName}", element);
     }
 
-    private static Usage? GetOptionalUsage(JsonElement element, string propertyName)
+    private static T? GetOptional<T>(JsonElement element, string propertyName)
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return prop.Deserialize<Usage>(JsonUtil.SNAKECASELOWER_OPTIONS);
+            return prop.Deserialize<T>(JsonUtil.SNAKECASELOWER_OPTIONS);
         }
-        return null;
+        return default(T);
     }
 }

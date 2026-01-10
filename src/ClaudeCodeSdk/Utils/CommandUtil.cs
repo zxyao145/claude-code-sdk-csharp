@@ -119,17 +119,9 @@ internal class CommandUtil
                 cmd.AddRange(new[] { "--add-dir", dir.ToString() });
         }
 
-        if (options.McpServers != null)
+        if (options.McpServers != null && options.McpServers.Count > 0)
         {
-            if (options.McpServers is Dictionary<string, object> dict)
-            {
-                var json = JsonUtil.Serialize(new { mcpServers = dict });
-                cmd.AddRange(new[] { "--mcp-config", json });
-            }
-            else
-            {
-                cmd.AddRange(new[] { "--mcp-config", options.McpServers.ToString() ?? "" });
-            }
+            cmd.AddRange(new[] { "--mcp-config", JsonUtil.Serialize(options.McpServers) });
         }
 
         if (options.ExtraArgs != null)

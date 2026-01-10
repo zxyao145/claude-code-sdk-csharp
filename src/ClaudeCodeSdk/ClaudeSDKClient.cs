@@ -61,10 +61,12 @@ public class ClaudeSdkClient : IAsyncDisposable
     /// <param name="prompt">String message or async enumerable of message dictionaries</param>
     /// <param name="sessionId">Session identifier for the conversation</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task QueryAsync(object prompt, string sessionId = "default", CancellationToken cancellationToken = default)
+    public async Task QueryAsync(object prompt, string? sessionId = "default", CancellationToken cancellationToken = default)
     {
         if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
+
+        sessionId ??= "default";
 
         if (prompt is string stringPrompt)
         {

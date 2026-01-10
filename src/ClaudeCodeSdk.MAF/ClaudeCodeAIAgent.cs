@@ -13,50 +13,33 @@ namespace ClaudeCodeSdk.MAF;
 /// </summary>
 public class ClaudeCodeAIAgent : AIAgent
 {
-    private readonly ClaudeCodeOptions _options;
+    private readonly ClaudeCodeAIAgentOptions _options;
     private readonly ILogger? _logger;
 
     /// <summary>
-    /// Initialize Claude Code AI Agent.
+    /// ClaudeCodeOptions.Resume will not working. Please replace with AgentThread
+    /// 
     /// </summary>
-    /// <param name="options">Optional ClaudeCodeOptions configuration</param>
-    /// <param name="logger">Optional logger for debugging</param>
+    /// <param name="options"></param>
+    /// <param name="logger"></param>
     public ClaudeCodeAIAgent(ClaudeCodeOptions? options = null, ILogger? logger = null)
+        : this(ClaudeCodeAIAgentOptions.From(options), logger)
     {
-        _options = options ?? new ClaudeCodeOptions();
+
+    }
+
+    public ClaudeCodeAIAgent(ClaudeCodeAIAgentOptions? options = null, ILogger? logger = null)
+    {
+        _options = options ?? new ClaudeCodeAIAgentOptions();
         _logger = logger;
     }
 
     public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
     {
         var sessionId = serializedThread.TryGetProperty("sessionId", out var sidProp)
-            ? sidProp.GetString() ?? "default"
-            : "default";
+            ? sidProp.GetString() : null;
 
-        var messages = new List<ChatMessage>();
-        if (serializedThread.TryGetProperty("messages", out var messagesProp) && messagesProp.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var msgElement in messagesProp.EnumerateArray())
-            {
-                if (msgElement.TryGetProperty("role", out var roleProp) &&
-                    msgElement.TryGetProperty("content", out var contentProp))
-                {
-                    var role = roleProp.GetString();
-                    var content = contentProp.GetString();
-
-                    if (role == "user")
-                    {
-                        messages.Add(new ChatMessage(ChatRole.User, content));
-                    }
-                    else if (role == "assistant")
-                    {
-                        messages.Add(new ChatMessage(ChatRole.Assistant, content));
-                    }
-                }
-            }
-        }
-
-        return new ClaudeCodeAgentThread(sessionId, messages);
+        return new ClaudeCodeAgentThread(sessionId);
     }
 
     public override AgentThread GetNewThread()
@@ -66,8 +49,11 @@ public class ClaudeCodeAIAgent : AIAgent
 
     private ClaudeCodeAgentThread NewThread()
     {
-        return new ClaudeCodeAgentThread(sessionId: _options.Resume);
+        return new ClaudeCodeAgentThread();
     }
+
+
+    #region RunAsync
 
     public override async Task<AgentRunResponse> RunAsync(
         IEnumerable<ChatMessage> messages,
@@ -76,7 +62,7 @@ public class ClaudeCodeAIAgent : AIAgent
         CancellationToken cancellationToken = default
         )
     {
-        var claudeThread = thread as ClaudeCodeAgentThread ?? null;
+        var claudeThread = (thread as ClaudeCodeAgentThread ?? NewThread())!;
         var messagesList = messages.ToList();
         var clientOptions = PrepareOptionsWithThread(claudeThread, messagesList);
         await using var client = new ClaudeSdkClient(clientOptions, _logger);
@@ -94,38 +80,29 @@ public class ClaudeCodeAIAgent : AIAgent
 
             // Receive and collect all responses
             var responseMessages = new List<ChatMessage>();
-
+            UsageDetails? usageDetails = null;
             foreach (var message in combinedMessages)
             {
                 if (message.Role == ChatRole.User)
                 {
                     var content = message.Text ?? string.Empty;
-                    if (claudeThread != null)
-                    {
-                        await client.QueryAsync(content,
-                            sessionId: claudeThread.SessionId,
-                            cancellationToken: cancellationToken);
-                    }
-                    else
-                    {
-                        await client.QueryAsync(content,
-                            cancellationToken: cancellationToken);
-                    }
+                    await client.QueryAsync(content,
+                             sessionId: claudeThread.SessionId,
+                             cancellationToken: cancellationToken);
 
                     await foreach (var claudeMessage in client.ReceiveResponseAsync(cancellationToken))
                     {
-                        if (claudeMessage is AssistantMessage assistantMsg)
+                        claudeThread.SetSessionIdIfNull(claudeMessage);
+
+                        var assistantMessage = ConvertClaudeMessageToChatMessage(claudeMessage);
+                        if (assistantMessage != null)
                         {
-                            var textContent = ExtractTextFromAssistantMessage(assistantMsg);
-                            if (!string.IsNullOrEmpty(textContent))
-                            {
-                                var assistantMessage = new ChatMessage(ChatRole.Assistant, textContent);
-                                responseMessages.Add(assistantMessage);
-                                if (claudeThread != null)
-                                {
-                                    claudeThread.Messages.Add(assistantMessage);
-                                }
-                            }
+                            responseMessages.Add(assistantMessage);
+                        }
+
+                        if (claudeMessage is ResultMessage resultMessage)
+                        {
+                            usageDetails = ConvertUsageDetails(resultMessage);
                         }
                     }
                 }
@@ -136,6 +113,7 @@ public class ClaudeCodeAIAgent : AIAgent
             // Return complete response
             return new AgentRunResponse
             {
+                Usage = usageDetails,
                 Messages = responseMessages,
                 ResponseId = Guid.NewGuid().ToString()
             };
@@ -147,16 +125,69 @@ public class ClaudeCodeAIAgent : AIAgent
         }
     }
 
+    private ChatMessage? ConvertClaudeMessageToChatMessage(IMessage claudeMessage)
+    {
+        if (claudeMessage is AssistantMessage message)
+        {
+            var textParts = new List<string>();
+
+            foreach (var content in message.Content)
+            {
+                textParts.Add(ConvertContentBlockToString(content));
+            }
+
+            ChatMessage assistantMessage =
+                new ChatMessage(
+                    ChatRole.Assistant,
+                    [new TextContent(JsonUtil.Serialize(textParts))]
+                );
+            return assistantMessage;
+        }
+
+        return null;
+    }
+
+    private static string ConvertContentBlockToString(IContentBlock content)
+    {
+        if (content is TextBlock textBlock)
+        {
+            return textBlock.Text;
+        }
+        else if (content is ThinkingBlock thinkingBlock)
+        {
+            return $"Thinking: {thinkingBlock.Thinking}";
+            // Optionally include thinking content
+        }
+        else if (content is ToolUseBlock toolUseBlock)
+        {
+            return $"Tool using: {toolUseBlock.Name}";
+        }
+        else if (content is ToolResultBlock toolResultBlock)
+        {
+            var res = (toolResultBlock.IsError ?? false) ? "error" : "success";
+            return $"Tool use result: {res}";
+        }
+        else if (content is ErrorContentBlock errorBlock)
+        {
+            return $"Error: {errorBlock.Message}";
+        }
+        throw new NotImplementedException();
+    }
+
+    #endregion
+
+
+    #region RunStreamingAsync
+
     public override async IAsyncEnumerable<AgentRunResponseUpdate> RunStreamingAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var claudeThread = thread as ClaudeCodeAgentThread ?? null;
+        var claudeThread = (thread as ClaudeCodeAgentThread ?? NewThread())!;
         var messagesList = messages.ToList();
         var clientOptions = PrepareOptionsWithThread(claudeThread, messagesList);
-        clientOptions = clientOptions with { Resume = null };
 
         await using var client = new ClaudeSdkClient(clientOptions, _logger);
 
@@ -171,40 +202,24 @@ public class ClaudeCodeAIAgent : AIAgent
         foreach (var message in messagesList)
         {
             var content = message.Text ?? string.Empty;
-            if (claudeThread != null)
-            {
-                await client.QueryAsync(content,
-                    sessionId: claudeThread.SessionId,
-                    cancellationToken: cancellationToken);
-            }
-            else
-            {
-                await client.QueryAsync(content,
-                    cancellationToken: cancellationToken);
-            }
+            await client.QueryAsync(content,
+                     sessionId: claudeThread.SessionId,
+                     cancellationToken: cancellationToken);
 
             // Receive and yield responses
             await foreach (var claudeMessage in client.ReceiveResponseAsync(cancellationToken))
             {
+                claudeThread.SetSessionIdIfNull(claudeMessage);
+
                 var update = ConvertToAgentRunResponseUpdate(claudeMessage);
                 if (update != null)
                 {
                     yield return update;
                 }
-
-                // Update thread with response
-                if (claudeThread != null &&
-                        claudeMessage is AssistantMessage assistantMsg)
-                {
-                    var textContent = ExtractTextFromAssistantMessage(assistantMsg);
-                    if (!string.IsNullOrEmpty(textContent))
-                    {
-                        claudeThread.Messages.Add(new ChatMessage(ChatRole.Assistant, textContent));
-                    }
-                }
             }
         }
     }
+
 
     private AgentRunResponseUpdate? ConvertToAgentRunResponseUpdate(IMessage claudeMessage)
     {
@@ -214,11 +229,13 @@ public class ClaudeCodeAIAgent : AIAgent
             var res = new AgentRunResponseUpdate
             {
                 Role = ChatRole.Assistant,
-                ResponseId = Guid.NewGuid().ToString(),
-                MessageId = Guid.NewGuid().ToString(),
                 AuthorName = assistantMsg.Model,
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    { "type", claudeMessage.Type.Value },
+                },
             };
-            ConvertContent(assistantMsg.Content, res);
+            res.Contents = ConvertContent(assistantMsg.Content);
             return res;
         }
 
@@ -227,14 +244,13 @@ public class ClaudeCodeAIAgent : AIAgent
             return new AgentRunResponseUpdate
             {
                 Role = ChatRole.System,
-                AuthorName = systemMessage.Subtype,
+
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
+                    { "type", claudeMessage.Type.Value },
                     { "subtype" , systemMessage.Subtype}
                 },
-                Contents = [new TextContent($"[{JsonUtil.Serialize(systemMessage.Data)}")],
-                ResponseId = Guid.NewGuid().ToString(),
-                MessageId = Guid.NewGuid().ToString()
+                Contents = [new TextContent($"{JsonUtil.Serialize(systemMessage.Data)}")],
             };
         }
 
@@ -243,8 +259,10 @@ public class ClaudeCodeAIAgent : AIAgent
             var res = new AgentRunResponseUpdate
             {
                 Role = ChatRole.User,
-                ResponseId = Guid.NewGuid().ToString(),
-                MessageId = Guid.NewGuid().ToString()
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    { "type", claudeMessage.Type.Value },
+                },
             };
 
             // Handle Content which can be string or List<IContentBlock>
@@ -254,7 +272,7 @@ public class ClaudeCodeAIAgent : AIAgent
             }
             else if (userMessage.Content is IEnumerable<IContentBlock> blocks)
             {
-                ConvertContent(blocks, res);
+                res.Contents = ConvertContent(blocks);
             }
             else
             {
@@ -266,48 +284,28 @@ public class ClaudeCodeAIAgent : AIAgent
 
         if (claudeMessage is ResultMessage resultMessage)
         {
-            return new AgentRunResponseUpdate
+            UsageDetails? usageDetails = ConvertUsageDetails(resultMessage);
+            if (usageDetails != null)
             {
-                Role = ChatRole.System,
-                AdditionalProperties = new AdditionalPropertiesDictionary
+                return new AgentRunResponseUpdate
                 {
-                    { "type", "result" },
-                    { "subtype", resultMessage.Subtype },
-                },
-                Contents = [new TextContent($"{JsonUtil.Serialize(resultMessage)}")],
-                ResponseId = Guid.NewGuid().ToString(),
-                MessageId = Guid.NewGuid().ToString()
-            };
+                    Role = ChatRole.System,
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        { "type", claudeMessage.Type.Value },
+                        { "subtype", resultMessage.Subtype },
+                    },
+                    Contents = [new UsageContent(usageDetails)],
+                };
+            }
         }
 
         return null;
     }
 
-    private string ExtractTextFromAssistantMessage(AssistantMessage message)
-    {
-        var textParts = new List<string>();
-
-        foreach (var content in message.Content)
-        {
-            if (content is TextBlock textBlock)
-            {
-                textParts.Add(textBlock.Text);
-            }
-            else if (content is ThinkingBlock thinkingBlock)
-            {
-                // Optionally include thinking content
-                textParts.Add($"Thinking: {thinkingBlock.Thinking}");
-            }
-        }
-
-        return JsonUtil.Serialize(textParts);
-        // return string.Join("\n", textParts);
-    }
-
-    private static void ConvertContent(IEnumerable<IContentBlock> contents, AgentRunResponseUpdate result)
+    private static List<AIContent> ConvertContent(IEnumerable<IContentBlock> contents)
     {
         var aiContents = new List<AIContent>();
-        result.Contents = aiContents;
 
         foreach (var item in contents)
         {
@@ -317,33 +315,64 @@ public class ClaudeCodeAIAgent : AIAgent
                     new TextContent($"{textBlock.Text}")
                 );
             }
-
+            if (item is ErrorContentBlock errorBlock)
+            {
+                var res = new ErrorContent(errorBlock.Message);
+                aiContents.Add(res);
+            }
             if (item is ThinkingBlock thinkingBlock)
             {
-                aiContents.Add(
-                    new TextContent($"{"Thinking: " + thinkingBlock.Thinking}")
-                );
+                var res = new TextReasoningContent(thinkingBlock.Thinking);
+                aiContents.Add(res);
             }
 
             if (item is ToolUseBlock toolUseBlock)
             {
-                aiContents.Add(
-                    new TextContent($"{"Using Tool:" + toolUseBlock.Name}")
-                );
+                Dictionary<string, object?> arguments = toolUseBlock.Input
+                    .ToDictionary(x => x.Key, x => (object?)x.Value);
+                var funcall = new FunctionCallContent(toolUseBlock.Id, toolUseBlock.Name, arguments);
+                aiContents.Add(funcall);
             }
 
             if (item is ToolResultBlock toolResultBlock)
             {
-                aiContents.Add(
-                    new TextContent($"{$"Using Result:" + toolResultBlock.Content}")
-                );
+                var res = new FunctionResultContent(toolResultBlock.ToolUseId, toolResultBlock.Content);
+                aiContents.Add(res);
             }
         }
+
+        return aiContents;
     }
+
+    #endregion
+
+
+    private static UsageDetails? ConvertUsageDetails(ResultMessage resultMessage)
+    {
+        var usage = resultMessage.Usage;
+        if (usage == null)
+        {
+            return null;
+        }
+
+        var usageDetails = new UsageDetails
+        {
+            InputTokenCount = usage.InputTokens,
+            OutputTokenCount = usage.OutputTokens,
+            CachedInputTokenCount = usage.CacheCreationInputTokens,
+            AdditionalCounts = new AdditionalPropertiesDictionary<long>
+            {
+                {"cacheReadInputTokens", usage.CacheReadInputTokens },
+            }
+        };
+
+        return usageDetails;
+    }
+
 
     private ClaudeCodeOptions PrepareOptionsWithThread(ClaudeCodeAgentThread? thread, IEnumerable<ChatMessage> messages)
     {
-        var options = _options;
+        var options = _options.ToClaudeCodeOptions();
 
         // Extract system prompt from messages if present
         var systemMessage = messages.FirstOrDefault(m => m.Role == ChatRole.System);
