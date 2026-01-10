@@ -180,23 +180,27 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             StandardErrorEncoding = Encoding.UTF8
         };
 
-        // Set environment variables
-        var env = _options.EnvironmentVariables ?? new Dictionary<string, string?>();
-        env["CLAUDE_CODE_ENTRYPOINT"] = "sdk-csharp";
+
+        // Then apply custom environment variables from options (overrides system vars)
+        if (_options.EnvironmentVariables != null)
+        {
+            foreach (var (key, value) in _options.EnvironmentVariables)
+            {
+                if (value != null)
+                    startInfo.EnvironmentVariables[key] = value;
+                else
+                    startInfo.EnvironmentVariables.Remove(key);
+            }
+        }
+
+        // Finally, set SDK-specific variables (highest priority)
+        startInfo.EnvironmentVariables["CLAUDE_CODE_ENTRYPOINT"] = "sdk-csharp";
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
-            env["ANTHROPIC_AUTH_TOKEN"] = _options.ApiKey;
+            startInfo.EnvironmentVariables["ANTHROPIC_AUTH_TOKEN"] = _options.ApiKey;
 
         if (!string.IsNullOrWhiteSpace(_options.BaseUrl))
-            env["ANTHROPIC_BASE_URL"] = _options.BaseUrl;
-
-        foreach (var (key, value) in env)
-        {
-            if (value != null)
-                startInfo.Environment[key] = value;
-            else
-                startInfo.Environment.Remove(key);
-        }
+            startInfo.EnvironmentVariables["ANTHROPIC_BASE_URL"] = _options.BaseUrl;
 
         return startInfo;
     }
