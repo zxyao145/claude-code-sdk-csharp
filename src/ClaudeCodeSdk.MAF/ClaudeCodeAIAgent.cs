@@ -228,6 +228,7 @@ public class ClaudeCodeAIAgent : AIAgent
         {
             var res = new AgentRunResponseUpdate
             {
+                MessageId = claudeMessage.Id,
                 Role = ChatRole.Assistant,
                 AuthorName = assistantMsg.Model,
                 AdditionalProperties = new AdditionalPropertiesDictionary
@@ -243,6 +244,7 @@ public class ClaudeCodeAIAgent : AIAgent
         {
             return new AgentRunResponseUpdate
             {
+                MessageId = claudeMessage.Id,
                 Role = ChatRole.System,
 
                 AdditionalProperties = new AdditionalPropertiesDictionary
@@ -258,6 +260,7 @@ public class ClaudeCodeAIAgent : AIAgent
         {
             var res = new AgentRunResponseUpdate
             {
+                MessageId = claudeMessage.Id,
                 Role = ChatRole.User,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
@@ -289,6 +292,7 @@ public class ClaudeCodeAIAgent : AIAgent
             {
                 return new AgentRunResponseUpdate
                 {
+                    MessageId = claudeMessage.Id,
                     Role = ChatRole.System,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {

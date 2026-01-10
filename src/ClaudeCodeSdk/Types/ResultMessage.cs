@@ -7,6 +7,8 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record ResultMessage : IMessage
 {
+    public string Id { get; init; } = "";
+
     public MessageType Type => MessageType.Result;
 
     [JsonPropertyName("subtype")]

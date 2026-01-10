@@ -7,6 +7,8 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record AssistantMessage : IMessage
 {
+    public string Id { get; init; } = "";
+
     public MessageType Type => MessageType.Assistant;
 
     [JsonPropertyName("content")]

@@ -6,4 +6,5 @@ namespace ClaudeCodeSdk.Types;
 public interface IMessage
 {
     MessageType Type { get; }
+    string Id { get; }
 }

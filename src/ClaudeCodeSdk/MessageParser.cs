@@ -100,7 +100,11 @@ internal static class MessageParser
                 throw new MessageParseException("Invalid content type in user message", data);
             }
 
-            return new UserMessage { Content = content };
+            return new UserMessage
+            {
+                Id = GetRequiredString(data, "uuid"),
+                Content = content 
+            };
         }
         catch (Exception ex) when (ex is not MessageParseException)
         {
@@ -112,6 +116,11 @@ internal static class MessageParser
     {
         try
         {
+            if (!data.TryGetProperty("uuid", out var uuidElement))
+            {
+                throw new MessageParseException("Missing 'uuid' field in assistant message", data);
+            }
+
             if (!data.TryGetProperty("message", out var messageElement))
             {
                 throw new MessageParseException("Missing 'message' field in assistant message", data);
@@ -139,6 +148,7 @@ internal static class MessageParser
                 {
                     return new AssistantMessage
                     {
+                        Id = uuidElement.GetString()!,
                         Content = [new ErrorContentBlock(errorString)],
                         Model = modelElement.GetString()!,
                         SessionId = sessionIdElement.GetString()!,
@@ -155,6 +165,7 @@ internal static class MessageParser
 
             return new AssistantMessage
             {
+                Id = uuidElement.GetString()!,
                 Content = contentBlocks,
                 Model = modelElement.GetString()!,
                 SessionId = sessionIdElement.GetString()!,
@@ -179,12 +190,17 @@ internal static class MessageParser
             {
                 throw new MessageParseException("Missing 'session_id' field in system message", data);
             }
+            if (!data.TryGetProperty("uuid", out var uuidElement))
+            {
+                throw new MessageParseException("Missing 'uuid' field in system message", data);
+            }
 
             var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(data.GetRawText());
             dataDict.Remove("subtype");
 
             return new SystemMessage
             {
+                Id = uuidElement.GetString()!,
                 Subtype = subtypeElement.GetString()!,
                 SessionId = sessionIdElement.GetString()!,
                 Data = dataDict
@@ -202,6 +218,7 @@ internal static class MessageParser
         {
             var result = new ResultMessage
             {
+                Id = GetRequiredString(data, "uuid"),
                 Subtype = GetRequiredString(data, "subtype"),
                 DurationApiMs = GetRequiredInt32(data, "duration_api_ms"),
                 DurationMs = GetRequiredInt32(data, "duration_ms"),
