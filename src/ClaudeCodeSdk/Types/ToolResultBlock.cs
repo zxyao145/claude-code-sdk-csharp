@@ -15,6 +15,9 @@ public record ToolResultBlock : IContentBlock
     [JsonPropertyName("content")]
     public object? Content { get; init; }
 
+    [JsonPropertyName("tool_use_result")]
+    public required Dictionary<string, object> ToolUseResult { get; init; }
+
     [JsonPropertyName("is_error")]
     public bool? IsError { get; init; }
 }

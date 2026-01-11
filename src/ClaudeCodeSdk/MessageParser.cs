@@ -268,6 +268,7 @@ internal static class MessageParser
             {
                 ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
                 Content = GetOptionalObject(blockElement, "content"),
+                ToolUseResult = GetOptionalDictionary(blockElement, "tool_use_result") ?? new Dictionary<string, object>(),
                 IsError = GetOptionalBoolean(blockElement, "is_error")
             },
             _ => throw new MessageParseException($"Unknown content block type: {blockType}", blockElement)
@@ -332,6 +333,15 @@ internal static class MessageParser
             return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
         }
         throw new MessageParseException($"Missing required property: {propertyName}", element);
+    }
+
+    private static Dictionary<string, object>? GetOptionalDictionary(JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var prop))
+        {
+            return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
+        }
+        return null;
     }
 
     private static T? GetOptional<T>(JsonElement element, string propertyName)

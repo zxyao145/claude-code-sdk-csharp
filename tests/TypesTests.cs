@@ -51,6 +51,7 @@ public class TypesTests
         {
             ToolUseId = "tool1",
             Content = "Result content",
+            ToolUseResult = new(),
             IsError = false
         };
 

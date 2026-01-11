@@ -298,6 +298,7 @@ public class ClaudeCodeAIAgent : AIAgent
                     {
                         { "type", claudeMessage.Type.Value },
                         { "subtype", resultMessage.Subtype },
+                        { "totalCostUsd", resultMessage.TotalCostUsd  }
                     },
                     Contents = [new UsageContent(usageDetails)],
                 };
@@ -340,7 +341,7 @@ public class ClaudeCodeAIAgent : AIAgent
 
             if (item is ToolResultBlock toolResultBlock)
             {
-                var res = new FunctionResultContent(toolResultBlock.ToolUseId, toolResultBlock.Content);
+                var res = new FunctionResultContent(toolResultBlock.ToolUseId, toolResultBlock.ToolUseResult);
                 aiContents.Add(res);
             }
         }
