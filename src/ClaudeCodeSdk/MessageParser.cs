@@ -1,6 +1,8 @@
 using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
+using System.Data;
 using System.Text.Json;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace ClaudeCodeSdk;
 
@@ -9,6 +11,14 @@ namespace ClaudeCodeSdk;
 /// </summary>
 internal static class MessageParser
 {
+    /// <summary>
+    /// Parse message from CLI output into typed Message objects.
+    /// </summary>
+    /// <param name="jsonElement">Raw message text from CLI output</param>
+    /// <param name="logger">Optional logger for debugging</param>
+    /// <returns>Parsed Message object</returns>
+    /// <exception cref="MessageParseException">If parsing fails or message type is unrecognized</exception>
+
     public static IMessage? ParseMessage(string line, ILogger? logger = null)
     {
         Dictionary<string, object>? data;
@@ -27,20 +37,12 @@ internal static class MessageParser
         }
         //var jsonElement = JsonSerializer.SerializeToElement(line, JsonUtil.SNAKECASELOWER_OPTIONS);
         var jsonElement = JsonUtil.SnakeCaseSerializeToElement(data);
-
         return ParseMessage(jsonElement, logger);
     }
 
 
-    /// <summary>
-    /// Parse message from CLI output into typed Message objects.
-    /// </summary>
-    /// <param name="jsonElement">Raw message dictionary from CLI output</param>
-    /// <param name="logger">Optional logger for debugging</param>
-    /// <returns>Parsed Message object</returns>
-    /// <exception cref="MessageParseException">If parsing fails or message type is unrecognized</exception>
-    public static IMessage ParseMessage(JsonElement jsonElement, ILogger? logger = null)
-    {
+    private static IMessage ParseMessage(JsonElement jsonElement, ILogger? logger = null)
+     {
         if (jsonElement.ValueKind != JsonValueKind.Object)
         {
             throw new MessageParseException(
@@ -240,6 +242,7 @@ internal static class MessageParser
 
     private static IContentBlock ParseContentBlock(JsonElement blockElement, JsonElement msgData)
     {
+
         if (!blockElement.TryGetProperty("type", out var typeElement))
         {
             throw new MessageParseException("Content block missing 'type' field", blockElement);
@@ -247,32 +250,49 @@ internal static class MessageParser
 
         var blockType = typeElement.GetString();
 
-        return blockType switch
+        bool isError = false;
+        if (blockElement.TryGetProperty("is_error", out var isErrorElement))
         {
-            "text" => new TextBlock
+            isError = isErrorElement.GetBoolean();
+        }
+
+        if (!isError)
+        {
+            return blockType switch
             {
-                Text = GetRequiredString(blockElement, "text")
-            },
-            "thinking" => new ThinkingBlock
-            {
-                Thinking = GetRequiredString(blockElement, "thinking"),
-                Signature = GetRequiredString(blockElement, "signature")
-            },
-            "tool_use" => new ToolUseBlock
-            {
-                Id = GetRequiredString(blockElement, "id"),
-                Name = GetRequiredString(blockElement, "name"),
-                Input = GetRequiredDictionary(blockElement, "input")
-            },
-            "tool_result" => new ToolResultBlock
-            {
-                ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
-                Content = GetOptionalObject(blockElement, "content"),
-                ToolUseResult = GetOptionalDictionary(msgData, "tool_use_result") ?? new Dictionary<string, object>(),
-                IsError = GetOptionalBoolean(blockElement, "is_error")
-            },
-            _ => throw new MessageParseException($"Unknown content block type: {blockType}", blockElement)
+                "text" => new TextBlock
+                {
+                    Text = GetRequiredString(blockElement, "text")
+                },
+                "thinking" => new ThinkingBlock
+                {
+                    Thinking = GetRequiredString(blockElement, "thinking"),
+                    Signature = GetRequiredString(blockElement, "signature")
+                },
+                "tool_use" => new ToolUseBlock
+                {
+                    Id = GetRequiredString(blockElement, "id"),
+                    Name = GetRequiredString(blockElement, "name"),
+                    Input = GetRequiredDictionary(blockElement, "input")
+                },
+                "tool_result" => new ToolResultBlock
+                {
+                    ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
+                    Content = GetOptionalObject(blockElement, "content"),
+                    ToolUseResult = GetOptionalDictionary(msgData, "tool_use_result") ?? new Dictionary<string, object>(),
+                    IsError = GetOptionalBoolean(blockElement, "is_error")
+                },
+                _ => throw new MessageParseException($"Unknown content block type: {blockType}", blockElement)
+            };
+        }
+
+        var errorDetails = blockElement.GetRawText();
+        var error = new ErrorContentBlock($"parse {blockType} type message error")
+        {
+            Details = errorDetails
         };
+
+        return error;
     }
 
     private static string GetRequiredString(JsonElement element, string propertyName)
