@@ -31,8 +31,8 @@ jobs:
 
     - name: Build and pack ClaudeCodeSdk.MAF
       run: |
-        # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk
-        dotnet nuget add source src/ClaudeCodeSdk/bin/Release --name local-temp
+        # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk (use absolute path)
+        dotnet nuget add source "$GITHUB_WORKSPACE/src/ClaudeCodeSdk/bin/Release" --name local-temp
 
         # Build and pack ClaudeCodeSdk.MAF with local source
         dotnet build src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release
