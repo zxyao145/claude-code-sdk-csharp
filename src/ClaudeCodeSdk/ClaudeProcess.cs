@@ -38,9 +38,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             throw new CLIConnectionException("Already connected");
 
         var args = CommandUtil.BuildCommand(_options, true, "");
-        _logger?.LogDebug("Starting Claude CLI: {CliPath} {Args}", _cliPath, string.Join(" ", args));
+        var argsString = string.Join(" ", args);
+        _logger?.LogDebug("Starting Claude CLI: {CliPath} {Args}", _cliPath, argsString);
 
-        _process = new Process { StartInfo = BuildStartInfo(_cliPath, string.Join(" ", args)) };
+        _process = new Process { StartInfo = BuildStartInfo(_cliPath, argsString) };
 
         try
         {
@@ -92,21 +93,21 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         {
             var line = await _stdout.ReadLineAsync(cancellationToken);
             _logger?.LogDebug("stdout ReadLine from process stdout:{line}", line);
+
             if (line == null)
                 break;
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
-            var msg =  MessageParser.ParseMessage(line, _logger);
-            if (msg != null)
-            {
-                yield return msg;
-                if (msg.Type == MessageType.Result) 
-                { 
-                    break; 
-                }
-            }
+            var msg = MessageParser.ParseMessage(line, _logger);
+            if (msg == null)
+                continue;
+
+            yield return msg;
+
+            if (msg.Type == MessageType.Result)
+                break;
         }
     }
 
@@ -120,8 +121,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
         try
         {
-            _process.Kill(entireProcessTree: true);
-            await _process.WaitForExitAsync();
+            await TerminateProcessAsync(_process);
         }
         catch (Exception ex)
         {
@@ -132,34 +132,41 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
     private async Task SendInitialPromptAsync(object prompt, CancellationToken cancellationToken)
     {
-        if (_stdin == null) return;
+        if (_stdin == null)
+            return;
 
-        if (prompt is string stringPrompt)
+        switch (prompt)
         {
-            var message = new Dictionary<string, object>
-            {
-                ["type"] = "user",
-                ["message"] = new Dictionary<string, object>
+            case string stringPrompt:
                 {
-                    ["role"] = "user",
-                    ["content"] = stringPrompt
-                },
-                ["parent_tool_use_id"] = null!,
-                ["session_id"] = "default"
-            };
+                    var message = new Dictionary<string, object>
+                    {
+                        ["type"] = "user",
+                        ["message"] = new Dictionary<string, object>
+                        {
+                            ["role"] = "user",
+                            ["content"] = stringPrompt
+                        },
+                        ["parent_tool_use_id"] = null!,
+                        ["session_id"] = "default"
+                    };
 
-            var json = JsonUtil.Serialize(message);
-            await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
-            await _stdin.FlushAsync(cancellationToken);
-        }
-        else if (prompt is IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable)
-        {
-            await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
-            {
-                var json = JsonUtil.Serialize(message);
-                await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
-            }
-            await _stdin.FlushAsync(cancellationToken);
+                    var json = JsonUtil.Serialize(message);
+                    await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
+                    await _stdin.FlushAsync(cancellationToken);
+                    break;
+                }
+
+            case IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable:
+                {
+                    await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
+                    {
+                        var json = JsonUtil.Serialize(message);
+                        await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
+                    }
+                    await _stdin.FlushAsync(cancellationToken);
+                    break;
+                }
         }
     }
 
@@ -208,11 +215,14 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     private static string FindClaudeCli()
     {
         // Try PATH first
-        string? cli = Which("claude");
-        if (cli != null) return cli;
+        var cli = Which("claude");
+        if (cli != null)
+            return cli;
 
         // Try common installation locations
-        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var isWindows = OperatingSystem.IsWindows();
+
         var locations = new[]
         {
             "claude",
@@ -225,9 +235,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
         foreach (var path in locations)
         {
-            if (File.Exists(path)) return path;
+            if (File.Exists(path))
+                return path;
 
-            if (OperatingSystem.IsWindows() && File.Exists(path + ".exe"))
+            if (isWindows && File.Exists(path + ".exe"))
                 return path + ".exe";
         }
 
@@ -251,21 +262,33 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
     private static string? Which(string command)
     {
-        string pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-        string[] paths = pathEnv.Split(Path.PathSeparator);
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var paths = pathEnv.Split(Path.PathSeparator);
+        var isWindows = OperatingSystem.IsWindows();
 
-        foreach (string p in paths)
+        foreach (var path in paths)
         {
-            string fullPath = Path.Combine(p, command);
-            if (File.Exists(fullPath)) return fullPath;
+            var fullPath = Path.Combine(path, command);
+            if (File.Exists(fullPath))
+                return fullPath;
 
-            if (OperatingSystem.IsWindows())
+            if (isWindows)
             {
-                string fullExe = fullPath + ".exe";
-                if (File.Exists(fullExe)) return fullExe;
+                var fullExe = fullPath + ".exe";
+                if (File.Exists(fullExe))
+                    return fullExe;
             }
         }
         return null;
+    }
+
+    private static async Task TerminateProcessAsync(Process process)
+    {
+        if (!process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
     }
 
     private async Task CleanupProcessAsync()
@@ -274,11 +297,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         {
             try
             {
-                if (!_process.HasExited)
-                {
-                    _process.Kill(entireProcessTree: true);
-                    await _process.WaitForExitAsync();
-                }
+                await TerminateProcessAsync(_process);
             }
             catch { /* Ignore cleanup errors */ }
             finally
