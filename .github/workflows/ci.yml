@@ -34,8 +34,9 @@ jobs:
     - name: Pack NuGet packages (Release)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        # Pack ClaudeCodeSdk first
-        dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
+        # Build and pack ClaudeCodeSdk first
+        dotnet build src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
+        dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release --no-build
 
         # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk
         dotnet nuget add source src/ClaudeCodeSdk/bin/Release --name local-temp
