@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Debug
+
+    - name: Test
+      run: dotnet test --no-build --configuration Debug --verbosity normal
+
+    - name: Pack NuGet packages (Release)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # Build and pack ClaudeCodeSdk first
+        dotnet build src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
+        dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release --no-build
+
+        # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk (use absolute path)
+        dotnet nuget add source "$GITHUB_WORKSPACE/src/ClaudeCodeSdk/bin/Release" --name local-temp
+
+        # Build and pack ClaudeCodeSdk.MAF with local source
+        dotnet build src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release
+        dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-build

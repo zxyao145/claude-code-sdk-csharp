@@ -1,0 +1,46 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Extract version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build and pack ClaudeCodeSdk
+      run: |
+        dotnet build src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release --no-restore
+        dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+
+    - name: Build and pack ClaudeCodeSdk.MAF
+      run: |
+        # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk (use absolute path)
+        dotnet nuget add source "$GITHUB_WORKSPACE/src/ClaudeCodeSdk/bin/Release" --name local-temp
+
+        # Build and pack ClaudeCodeSdk.MAF with local source
+        dotnet build src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release
+        dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+
+    - name: Publish to NuGet.org
+      run: |
+        dotnet nuget push "src/ClaudeCodeSdk/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        dotnet nuget push "src/ClaudeCodeSdk/bin/Release/*.snupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        dotnet nuget push "src/ClaudeCodeSdk.MAF/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        dotnet nuget push "src/ClaudeCodeSdk.MAF/bin/Release/*.snupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
