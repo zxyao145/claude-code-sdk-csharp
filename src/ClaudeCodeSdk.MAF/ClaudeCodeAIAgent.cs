@@ -61,7 +61,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     /// Ensures the client is connected, creating and connecting lazily on first use.
     /// Thread-safe with double-check locking.
     /// </summary>
-    private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
+    private async ValueTask EnsureConnectedAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
