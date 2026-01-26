@@ -7,12 +7,12 @@ namespace ClaudeCodeSdk.MAF;
 
 internal static partial class IMessageExtension
 {
-    public static AgentRunResponseUpdate? ToAgentRunResponseUpdate(this IMessage claudeMessage)
+    public static AgentResponseUpdate? ToAgentRunResponseUpdate(this IMessage claudeMessage)
     {
         if (claudeMessage is AssistantMessage assistantMsg
             && assistantMsg.Content.Count > 0)
         {
-            var res = new AgentRunResponseUpdate
+            var res = new AgentResponseUpdate
             {
                 MessageId = claudeMessage.Id,
                 Role = ChatRole.Assistant,
@@ -28,7 +28,7 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is SystemMessage systemMessage)
         {
-            return new AgentRunResponseUpdate
+            return new AgentResponseUpdate
             {
                 MessageId = claudeMessage.Id,
                 Role = ChatRole.System,
@@ -44,7 +44,7 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is UserMessage userMessage)
         {
-            var res = new AgentRunResponseUpdate
+            var res = new AgentResponseUpdate
             {
                 MessageId = claudeMessage.Id,
                 Role = ChatRole.User,
@@ -76,7 +76,7 @@ internal static partial class IMessageExtension
             UsageDetails? usageDetails = ConvertUsageDetails(resultMessage);
             if (usageDetails != null)
             {
-                return new AgentRunResponseUpdate
+                return new AgentResponseUpdate
                 {
                     MessageId = claudeMessage.Id,
                     Role = ChatRole.System,

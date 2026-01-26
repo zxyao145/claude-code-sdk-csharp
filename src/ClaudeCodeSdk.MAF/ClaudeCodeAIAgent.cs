@@ -43,7 +43,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         _clientManager = new ClaudeSdkClientManager(_options.ToClaudeCodeOptions(), _logger);
     }
 
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override ValueTask<AgentThread> DeserializeThreadAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
         var sessionId = serializedThread.TryGetProperty("sessionId", out var sidProp)
             ? sidProp.GetString() : null;
@@ -52,12 +52,15 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             throw new Exception("ClaudeCodeAIAgent cannot get sessionId in DeserializeThread");
         }
         Guid guid = Guid.Parse(sessionId);
-        return new ClaudeCodeAgentThread(guid);
+        AgentThread thread = new ClaudeCodeAgentThread(guid);
+        return ValueTask.FromResult(thread);
     }
 
-    public override AgentThread GetNewThread()
+
+    public override ValueTask<AgentThread> GetNewThreadAsync(CancellationToken cancellationToken = default)
     {
-        return NewThread();
+        AgentThread thread = NewThread();
+        return ValueTask.FromResult(thread);
     }
 
     private ClaudeCodeAgentThread NewThread()
@@ -67,7 +70,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     #region RunAsync
 
-    public override async Task<AgentRunResponse> RunAsync(
+    protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,
@@ -108,7 +111,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         }
 
         // Return complete response
-        return new AgentRunResponse
+        return new AgentResponse
         {
             Usage = usageDetails,
             Messages = responseMessages,
@@ -122,7 +125,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     #region RunStreamingAsync
 
-    public override async IAsyncEnumerable<AgentRunResponseUpdate> RunStreamingAsync(
+    protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,
