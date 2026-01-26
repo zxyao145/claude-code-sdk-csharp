@@ -110,6 +110,9 @@ internal class CommandUtil
         if (!string.IsNullOrEmpty(options.Resume))
             cmd.AddRange(new[] { "--resume", options.Resume });
 
+        if (options.SessionId.HasValue)
+            cmd.AddRange(new[] { "--session-id", options.SessionId.Value.ToString() });
+
         if (!string.IsNullOrEmpty(options.Settings))
             cmd.AddRange(new[] { "--settings", options.Settings });
 

@@ -14,6 +14,7 @@ public record ClaudeCodeOptions
     public PermissionMode? PermissionMode { get; init; }
     public bool ContinueConversation { get; init; } = false;
     public string? Resume { get; init; }
+    public Guid? SessionId { get; init; }
     public int? MaxTurns { get; init; }
     public IReadOnlyList<string> DisallowedTools { get; init; } = [];
     public string? Model { get; init; }

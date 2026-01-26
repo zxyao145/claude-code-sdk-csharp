@@ -13,6 +13,7 @@ public class ClaudeCodeAIAgentOptions
     public PermissionMode? PermissionMode { get; init; }
     public bool ContinueConversation { get; init; } = false;
     //public string? Resume { get; init; }
+    public Guid? SessionId { get; init; }
 
     public int? MaxTurns { get; init; }
     public IReadOnlyList<string> DisallowedTools { get; init; } = [];
@@ -56,6 +57,7 @@ public class ClaudeCodeAIAgentOptions
             McpServersPath = claudeCodeOptions.McpServersPath,
             PermissionMode = claudeCodeOptions.PermissionMode,
             ContinueConversation = claudeCodeOptions.ContinueConversation,
+            SessionId = claudeCodeOptions.SessionId,
             MaxTurns = claudeCodeOptions.MaxTurns,
             DisallowedTools = claudeCodeOptions.DisallowedTools,
             Model = claudeCodeOptions.Model,
@@ -89,6 +91,7 @@ public class ClaudeCodeAIAgentOptions
             McpServersPath = source.McpServersPath,
             PermissionMode = source.PermissionMode,
             ContinueConversation = source.ContinueConversation,
+            SessionId = source.SessionId,
             MaxTurns = source.MaxTurns,
             DisallowedTools = source.DisallowedTools,
             Model = source.Model,
