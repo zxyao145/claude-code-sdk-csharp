@@ -9,7 +9,6 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
-  <Folder Name="/解决方案项/" />
   <Project Path="examples/ClaudeCodeSdk.Examples.csproj" />
   <Project Path="src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj" />
   <Project Path="src/ClaudeCodeSdk/ClaudeCodeSdk.csproj" />

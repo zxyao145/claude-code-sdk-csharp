@@ -16,10 +16,13 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 {
     private readonly ClaudeCodeAIAgentOptions _options;
     private readonly ILogger? _logger;
-    private ClaudeSdkClient? _client;
-    private bool _isConnected;
+    private readonly ClaudeSdkClientManager _clientManager;
     private bool _disposed;
-    private readonly SemaphoreSlim _connectionLock = new(1, 1);
+
+    public ClaudeCodeAIAgent() : this(new ClaudeCodeAIAgentOptions(), null)
+    {
+
+    }
 
     /// <summary>
     /// ClaudeCodeOptions.Resume will not working. Please replace with AgentThread
@@ -37,14 +40,19 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     {
         _options = options ?? new ClaudeCodeAIAgentOptions();
         _logger = logger;
+        _clientManager = new ClaudeSdkClientManager(_options.ToClaudeCodeOptions(), _logger);
     }
 
     public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
     {
         var sessionId = serializedThread.TryGetProperty("sessionId", out var sidProp)
             ? sidProp.GetString() : null;
-
-        return new ClaudeCodeAgentThread(sessionId);
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new Exception("ClaudeCodeAIAgent cannot get sessionId in DeserializeThread");
+        }
+        Guid guid = Guid.Parse(sessionId);
+        return new ClaudeCodeAgentThread(guid);
     }
 
     public override AgentThread GetNewThread()
@@ -57,32 +65,6 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         return new ClaudeCodeAgentThread();
     }
 
-    /// <summary>
-    /// Ensures the client is connected, creating and connecting lazily on first use.
-    /// Thread-safe with double-check locking.
-    /// </summary>
-    private async ValueTask EnsureConnectedAsync(CancellationToken cancellationToken)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        if (_isConnected) return;
-
-        await _connectionLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (_isConnected) return;
-
-            _client ??= new ClaudeSdkClient(_options.ToClaudeCodeOptions(), _logger);
-            await _client.ConnectAsync(cancellationToken: cancellationToken);
-            _isConnected = true;
-        }
-        finally
-        {
-            _connectionLock.Release();
-        }
-    }
-
-
     #region RunAsync
 
     public override async Task<AgentRunResponse> RunAsync(
@@ -92,44 +74,34 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         CancellationToken cancellationToken = default
         )
     {
-        var claudeThread = (thread as ClaudeCodeAgentThread ?? NewThread())!;
+        var claudeThread = thread as ClaudeCodeAgentThread;
         var messagesList = messages.ToList();
 
-        // Ensure connection is established (lazy initialization)
-        await EnsureConnectedAsync(cancellationToken);
-
         // Convert messages to Claude format and send (exclude System messages)
-        var combinedMessages = messagesList
-            .Where(m => m.Role == ChatRole.User)
-            .ToList();
+        var content = CombinedMessages(
+                messagesList.Where(m => m.Role == ChatRole.User)
+            );
 
         // Receive and collect all responses
         var responseMessages = new List<ChatMessage>();
         UsageDetails? usageDetails = null;
-        foreach (var message in combinedMessages)
+        if (!string.IsNullOrWhiteSpace(content))
         {
-            if (message.Role == ChatRole.User)
+            IAsyncEnumerable<IMessage> asyncEnumMsgs
+                = await SendUserInput(claudeThread, content, cancellationToken);
+
+            await foreach (var claudeMessage in asyncEnumMsgs)
             {
-                var content = message.Text ?? string.Empty;
-                await _client!.QueryAsync(content,
-                         sessionId: claudeThread.SessionId,
-                         cancellationToken: cancellationToken);
-
-                await foreach (var claudeMessage in _client.ReceiveResponseAsync(cancellationToken))
+                if (claudeMessage is ResultMessage resultMessage)
                 {
-                    claudeThread.SetSessionIdIfNull(claudeMessage);
-
-                    if (claudeMessage is ResultMessage resultMessage)
+                    usageDetails = resultMessage.ToUsageDetails();
+                }
+                else
+                {
+                    var assistantMessage = claudeMessage.ToChatMessage();
+                    if (assistantMessage != null)
                     {
-                        usageDetails = resultMessage.ToUsageDetails();
-                    }
-                    else
-                    {
-                        var assistantMessage = claudeMessage.ToChatMessage();
-                        if (assistantMessage != null)
-                        {
-                            responseMessages.Add(assistantMessage);
-                        }
+                        responseMessages.Add(assistantMessage);
                     }
                 }
             }
@@ -144,6 +116,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         };
     }
 
+
     #endregion
 
 
@@ -155,29 +128,20 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var claudeThread = (thread as ClaudeCodeAgentThread ?? NewThread())!;
+        var claudeThread = thread as ClaudeCodeAgentThread;
         var messagesList = messages.ToList();
+        var content = CombinedMessages(
+                messagesList.Where(m => m.Role == ChatRole.User)
+            );
 
-        // Ensure connection is established (lazy initialization)
-        await EnsureConnectedAsync(cancellationToken);
-
-        // Convert messages to Claude format and send (exclude System messages)
-        var combinedMessages = messagesList
-            .Where(m => m.Role == ChatRole.User)
-            .ToList();
-
-        foreach (var message in combinedMessages)
+        if (!string.IsNullOrWhiteSpace(content))
         {
-            var content = message.Text ?? string.Empty;
-            await _client!.QueryAsync(content,
-                     sessionId: claudeThread.SessionId,
-                     cancellationToken: cancellationToken);
+            IAsyncEnumerable<IMessage> asyncEnumMsgs
+                = await SendUserInput(claudeThread, content, cancellationToken);
 
             // Receive and yield responses
-            await foreach (var claudeMessage in _client.ReceiveResponseAsync(cancellationToken))
+            await foreach (var claudeMessage in asyncEnumMsgs)
             {
-                claudeThread.SetSessionIdIfNull(claudeMessage);
-
                 var update = claudeMessage.ToAgentRunResponseUpdate();
                 if (update != null)
                 {
@@ -191,6 +155,34 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     #endregion
 
 
+    private string? CombinedMessages(IEnumerable<ChatMessage> userMessages)
+    {
+        // Convert messages to Claude format and send (exclude System messages)
+        return userMessages.FirstOrDefault()?.Text ?? "";
+    }
+
+    private async Task<IAsyncEnumerable<IMessage>> SendUserInput(ClaudeCodeAgentThread? claudeThread, string content, CancellationToken cancellationToken)
+    {
+        IAsyncEnumerable<IMessage> asyncEnumMsgs;
+        if (claudeThread == null)
+        {
+            asyncEnumMsgs = ClaudeQuery.QueryAsync(content, options: _options.ToClaudeCodeOptions(), _logger);
+        }
+        else
+        {
+            var client = await _clientManager.GetClientAsync(claudeThread, cancellationToken);
+
+            await client.QueryAsync(content,
+                 sessionId: claudeThread.SessionId.ToString(),
+                 cancellationToken: cancellationToken);
+
+            asyncEnumMsgs = client.ReceiveResponseAsync(cancellationToken);
+        }
+
+        return asyncEnumMsgs;
+    }
+
+
     #region IDisposable / IAsyncDisposable
 
     /// <summary>
@@ -201,15 +193,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     {
         if (_disposed) return;
 
-        if (_client != null)
-        {
-            _client.DisconnectAsync().GetAwaiter().GetResult();
-            _client.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            _client = null;
-        }
-
-        _connectionLock.Dispose();
-        _isConnected = false;
+        _clientManager.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _disposed = true;
         GC.SuppressFinalize(this);
     }
@@ -221,15 +205,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     {
         if (_disposed) return;
 
-        if (_client != null)
-        {
-            await _client.DisconnectAsync();
-            await _client.DisposeAsync();
-            _client = null;
-        }
-
-        _connectionLock.Dispose();
-        _isConnected = false;
+        await _clientManager.DisposeAsync();
         _disposed = true;
         GC.SuppressFinalize(this);
     }

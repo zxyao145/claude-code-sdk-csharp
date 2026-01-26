@@ -115,9 +115,10 @@ Examples in `examples/` demonstrate real-world usage patterns including tool int
 ## Microsoft Agent Framework (MAF) Integration
 
 ### Structure (`src/ClaudeCodeSdk.MAF/`)
-- `ClaudeCodeAIAgent` - Main AIAgent implementation using ClaudeSdkClient
+- `ClaudeCodeAIAgent` - Main AIAgent implementation
 - `ClaudeCodeAgentThread` - Thread management with session ID persistence
 - `ClaudeCodeAIAgentOptions` - Configuration wrapper for MAF-specific settings
+- `ClaudeSdkClientManager` - Manages ClaudeSdkClient lifecycle across sessions
 
 ### Key Behaviors
 - System messages are extracted and set as `SystemPrompt` in `ClaudeCodeOptions`
@@ -128,8 +129,9 @@ Examples in `examples/` demonstrate real-world usage patterns including tool int
 
 ### Important Notes
 - `ClaudeCodeOptions.Resume` is managed automatically via `AgentThread` - do not set manually
-- Each turn in a multi-turn conversation creates a new `ClaudeSdkClient` connection
+- `ClaudeSdkClientManager` automatically handles client creation/disposal when switching between threads
 - Session state persists via the thread's `SessionId` which maps to Claude Code sessions
+- When a different `AgentThread` (with different `SessionId`) is used, the manager automatically disposes the old client and creates a new one
 
 ## Project Structure
 
@@ -163,7 +165,8 @@ src/
 ├── ClaudeCodeSdk.MAF/          # Microsoft Agent Framework integration
 │   ├── ClaudeCodeAIAgent.cs    # AIAgent implementation
 │   ├── ClaudeCodeAgentThread.cs
-│   └── ClaudeCodeAIAgentOptions.cs
+│   ├── ClaudeCodeAIAgentOptions.cs
+│   └── ClaudeSdkClientManager.cs  # Client lifecycle manager
 │
 examples/                       # Usage examples
 tests/                          # Unit tests

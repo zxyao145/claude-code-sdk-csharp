@@ -6,11 +6,15 @@ Console.WriteLine("===================================");
 try
 {
 
-    // sRun quick start examples
+    // Run quick start examples
     await QuickStartExamples.Main(args);
 
     // Run streaming examples  
     await StreamingExamples.Main(args);
+
+
+    await MafExample.Main(args);
+
 }
 catch (Exception ex)
 {

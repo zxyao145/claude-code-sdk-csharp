@@ -18,47 +18,24 @@ internal sealed class ClaudeCodeAgentThread : AgentThread
     /// This property is set automatically when receiving the first <see cref="SystemMessage"/>
     /// from Claude Code that contains a session ID.
     /// </remarks>
-    public string? SessionId { get; private set; }
+    public Guid SessionId { get; private set; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ClaudeCodeAgentThread"/> class.
     /// </summary>
     /// <param name="sessionId">Optional session ID to resume a previous conversation.</param>
-    internal ClaudeCodeAgentThread(string? sessionId = null)
+    internal ClaudeCodeAgentThread(Guid? sessionId = null)
     {
-        SessionId = sessionId;
+        SessionId = sessionId ?? Guid.NewGuid();
     }
 
-    /// <summary>
-    /// Sets the session ID if it has not been set yet, extracting it from a Claude message.
-    /// </summary>
-    /// <param name="claudeMessage">The message to extract the session ID from.</param>
-    public void SetSessionIdIfNull(IMessage? claudeMessage)
-    {
-        if (claudeMessage is SystemMessage systemMessage)
-        {
-            SetSessionIdIfNull(systemMessage.SessionId);
-        }
-    }
-
-    /// <summary>
-    /// Sets the session ID if it has not been set yet.
-    /// </summary>
-    /// <param name="sessionId">The session ID to set.</param>
-    public void SetSessionIdIfNull(string? sessionId)
-    {
-        if (SessionId is null && !string.IsNullOrEmpty(sessionId))
-        {
-            SessionId = sessionId;
-        }
-    }
 
     /// <inheritdoc/>
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
         var state = new ThreadState
         {
-            SessionId = SessionId
+            SessionId = SessionId.ToString(),
         };
 
         return JsonSerializer.SerializeToElement(
