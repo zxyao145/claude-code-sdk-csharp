@@ -1,10 +1,15 @@
 <Solution>
+  <Folder Name="/.github/">
+    <File Path=".github/workflows/ci.yml" />
+    <File Path=".github/workflows/publish.yml" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Folder Name="/解决方案项/" />
   <Project Path="examples/ClaudeCodeSdk.Examples.csproj" />
   <Project Path="src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj" />
   <Project Path="src/ClaudeCodeSdk/ClaudeCodeSdk.csproj" />

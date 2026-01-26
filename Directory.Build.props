@@ -4,7 +4,7 @@
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageVersion>0.10.0-preview2</PackageVersion>
 		<Title>Claude Code SDK for .NET</Title>
 		<Authors>zxyao</Authors>
