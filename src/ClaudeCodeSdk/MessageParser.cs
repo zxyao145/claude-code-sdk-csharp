@@ -341,6 +341,10 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
+            if (prop.ValueKind == JsonValueKind.String)
+            {
+                return prop.GetRawText();
+            }
             return JsonUtil.SnakeCaseDeserialize<object>(prop.GetRawText());
         }
         return null;
@@ -359,6 +363,13 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
+            if(prop.ValueKind == JsonValueKind.String)
+            {
+                return new Dictionary<string, object>()
+                {
+                    { "content" , prop.GetRawText()}, 
+                };
+            }
             return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
         }
         return null;
