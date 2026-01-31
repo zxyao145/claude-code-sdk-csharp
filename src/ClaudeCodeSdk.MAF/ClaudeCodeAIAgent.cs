@@ -98,34 +98,26 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            try
+            await foreach (var claudeMessage in asyncEnumMsgs)
             {
-                await foreach (var claudeMessage in asyncEnumMsgs)
+                if (client != null && cancellationToken.IsCancellationRequested)
                 {
-                    if (client != null && cancellationToken.IsCancellationRequested)
-                    {
-                        await client.InterruptAsync(CancellationToken.None);
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
+                    await client.InterruptAsync(CancellationToken.None);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
 
-                    if (claudeMessage is ResultMessage resultMessage)
+                if (claudeMessage is ResultMessage resultMessage)
+                {
+                    usageDetails = resultMessage.ToUsageDetails();
+                }
+                else
+                {
+                    var assistantMessage = claudeMessage.ToChatMessage();
+                    if (assistantMessage != null)
                     {
-                        usageDetails = resultMessage.ToUsageDetails();
-                    }
-                    else
-                    {
-                        var assistantMessage = claudeMessage.ToChatMessage();
-                        if (assistantMessage != null)
-                        {
-                            responseMessages.Add(assistantMessage);
-                        }
+                        responseMessages.Add(assistantMessage);
                     }
                 }
-            }
-            catch (OperationCanceledException) when (client != null)
-            {
-                await client.InterruptAsync(CancellationToken.None);
-                throw;
             }
         }
 
@@ -166,28 +158,20 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            try
+            // Receive and yield responses
+            await foreach (var claudeMessage in asyncEnumMsgs)
             {
-                // Receive and yield responses
-                await foreach (var claudeMessage in asyncEnumMsgs)
+                if (client != null && cancellationToken.IsCancellationRequested)
                 {
-                    if (client != null && cancellationToken.IsCancellationRequested)
-                    {
-                        await client.InterruptAsync(CancellationToken.None);
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-
-                    var update = claudeMessage.ToAgentRunResponseUpdate();
-                    if (update != null)
-                    {
-                        yield return update;
-                    }
+                    await client.InterruptAsync(CancellationToken.None);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
-            }
-            catch (OperationCanceledException) when (client != null)
-            {
-                await client.InterruptAsync(CancellationToken.None);
-                throw;
+
+                var update = claudeMessage.ToAgentRunResponseUpdate();
+                if (update != null)
+                {
+                    yield return update;
+                }
             }
         }
     }
