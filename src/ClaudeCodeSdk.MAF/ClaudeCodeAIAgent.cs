@@ -95,6 +95,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             if (client != null && cancellationToken.IsCancellationRequested)
             {
                 await client.InterruptAsync(CancellationToken.None);
+                cancellationToken.ThrowIfCancellationRequested();
             }
 
             try
@@ -104,7 +105,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                     if (client != null && cancellationToken.IsCancellationRequested)
                     {
                         await client.InterruptAsync(CancellationToken.None);
-                        break;
+                        cancellationToken.ThrowIfCancellationRequested();
                     }
 
                     if (claudeMessage is ResultMessage resultMessage)
@@ -162,6 +163,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             if (client != null && cancellationToken.IsCancellationRequested)
             {
                 await client.InterruptAsync(CancellationToken.None);
+                cancellationToken.ThrowIfCancellationRequested();
             }
 
             try
@@ -172,7 +174,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                     if (client != null && cancellationToken.IsCancellationRequested)
                     {
                         await client.InterruptAsync(CancellationToken.None);
-                        yield break;
+                        cancellationToken.ThrowIfCancellationRequested();
                     }
 
                     var update = claudeMessage.ToAgentRunResponseUpdate();
