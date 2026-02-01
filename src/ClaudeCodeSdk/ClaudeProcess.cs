@@ -373,7 +373,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var line = await stderr.ReadLineAsync();
+                var line = await stderr.ReadLineAsync(cancellationToken);
                 if (line == null)
                     break;
 
