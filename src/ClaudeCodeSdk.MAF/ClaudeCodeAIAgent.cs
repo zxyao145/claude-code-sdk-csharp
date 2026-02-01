@@ -202,7 +202,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             client = await _clientManager.GetClientAsync(claudeThread, cancellationToken);
 
             await client.QueryAsync(content,
-                 sessionId: claudeThread.SessionId.ToString(),
+                 sessionId: claudeThread.ConversationId.ToString(),
                  cancellationToken: cancellationToken);
 
             asyncEnumMsgs = client.ReceiveResponseAsync(cancellationToken);
