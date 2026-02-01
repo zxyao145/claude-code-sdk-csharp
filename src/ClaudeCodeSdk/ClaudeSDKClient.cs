@@ -86,16 +86,19 @@ public class ClaudeSdkClient : IAsyncDisposable
         }
         else if (prompt is IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable)
         {
-            var messages = new List<Dictionary<string, object>>();
-            await foreach (var msg in asyncEnumerable.WithCancellation(cancellationToken))
+            async IAsyncEnumerable<Dictionary<string, object>> AddSessionIdAsync(
+                IAsyncEnumerable<Dictionary<string, object>> source,
+                [EnumeratorCancellation] CancellationToken token)
             {
-                if (!msg.ContainsKey("session_id"))
-                    msg["session_id"] = sessionId;
-                messages.Add(msg);
+                await foreach (var msg in source.WithCancellation(token))
+                {
+                    if (!msg.ContainsKey("session_id"))
+                        msg["session_id"] = sessionId;
+                    yield return msg;
+                }
             }
 
-            if (messages.Count > 0)
-                await _process.SendAsync(messages, cancellationToken);
+            await _process.SendAsync(AddSessionIdAsync(asyncEnumerable, cancellationToken), cancellationToken);
         }
         else
         {

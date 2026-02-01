@@ -1,8 +1,6 @@
 using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
-using System.Data;
 using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ClaudeCodeSdk;
 

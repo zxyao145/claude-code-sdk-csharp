@@ -20,6 +20,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     private Process? _process;
     private StreamWriter? _stdin;
     private StreamReader? _stdout;
+    private StreamReader? _stderr;
+    private Task? _stderrReaderTask;
+    private CancellationTokenSource? _stderrReadCts;
     private bool _disposed;
 
     public ClaudeProcess(ClaudeCodeOptions options, string? cliPath = null, ILogger? logger = null)
@@ -50,6 +53,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
             _stdin = _process.StandardInput;
             _stdout = _process.StandardOutput;
+            _stderr = _process.StandardError;
+            _stderrReadCts = new CancellationTokenSource();
+            _stderrReaderTask = StartErrorReaderAsync(_stderr, _stderrReadCts.Token);
 
             if (prompt != null)
                 await SendInitialPromptAsync(prompt, cancellationToken);
@@ -71,6 +77,24 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             throw new CLIConnectionException("Not connected");
 
         foreach (var message in messages)
+        {
+            var json = JsonUtil.Serialize(message);
+            _logger?.LogDebug("stdin WriteLine:{line}", json);
+            await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
+        }
+
+        await _stdin.FlushAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Send messages to Claude from an async stream.
+    /// </summary>
+    public async Task SendAsync(IAsyncEnumerable<Dictionary<string, object>> messages, CancellationToken cancellationToken = default)
+    {
+        if (_stdin == null)
+            throw new CLIConnectionException("Not connected");
+
+        await foreach (var message in messages.WithCancellation(cancellationToken))
         {
             var json = JsonUtil.Serialize(message);
             _logger?.LogDebug("stdin WriteLine:{line}", json);
@@ -312,6 +336,26 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
         _stdout?.Dispose();
         _stdout = null;
+
+        if (_stderrReadCts != null)
+        {
+            _stderrReadCts.Cancel();
+            _stderrReadCts.Dispose();
+            _stderrReadCts = null;
+        }
+
+        if (_stderrReaderTask != null)
+        {
+            try
+            {
+                await _stderrReaderTask;
+            }
+            catch { /* Ignore stderr reader errors on cleanup */ }
+            _stderrReaderTask = null;
+        }
+
+        _stderr?.Dispose();
+        _stderr = null;
     }
 
     public async ValueTask DisposeAsync()
@@ -321,5 +365,23 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             await CleanupProcessAsync();
             _disposed = true;
         }
+    }
+
+    private Task StartErrorReaderAsync(StreamReader stderr, CancellationToken cancellationToken)
+    {
+        return Task.Run(async () =>
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var line = await stderr.ReadLineAsync();
+                if (line == null)
+                    break;
+
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                _logger?.LogWarning("stderr ReadLine from process stderr:{line}", line);
+            }
+        }, cancellationToken);
     }
 }
