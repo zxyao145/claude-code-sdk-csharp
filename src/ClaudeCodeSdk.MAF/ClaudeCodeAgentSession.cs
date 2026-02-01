@@ -16,41 +16,6 @@ internal sealed class ClaudeCodeAgentSession : AgentSession
 
 
     /// <summary>
-    /// Gets the session ID for the Claude Code conversation.
-    /// </summary>
-    /// <remarks>
-    /// This property is set automatically when receiving the first <see cref="SystemMessage"/>
-    /// from Claude Code that contains a session ID.
-    /// </remarks>
-    /// /// ConversationId
-    public Guid? ConversationId
-    {
-        get;
-        internal set
-        {
-            if (field == null && value == null)
-            {
-                return;
-            }
-
-            if (this._chatHistoryProvider is not null)
-            {
-                // If we have a ChatHistoryProvider already, we shouldn't switch the session to use a conversation id
-                // since it means that the session contents will essentially be deleted, and the session will not work
-                // with the original agent anymore.
-                throw new InvalidOperationException("Only the ConversationId or ChatHistoryProvider may be set, but not both and switching from one to another is not supported.");
-            }
-            if (value == null)
-            {
-                ArgumentNullException.ThrowIfNull(value, nameof(value));
-            }
-
-            field = value;
-        }
-    }
-
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="ClaudeCodeAgentSession"/> class.
     /// </summary>
     /// <param name="sessionId">Optional session ID to resume a previous conversation.</param>
@@ -58,6 +23,26 @@ internal sealed class ClaudeCodeAgentSession : AgentSession
     {
         ConversationId = sessionId ?? Guid.NewGuid();
     }
+
+
+    /// <summary>
+    /// Gets the session ID for the Claude Code conversation.
+    /// </summary>
+    /// <remarks>
+    /// This property is set automatically when receiving the first <see cref="SystemMessage"/>
+    /// from Claude Code that contains a session ID.
+    /// </remarks>
+    /// /// ConversationId
+    public Guid ConversationId
+    {
+        get;
+        internal set
+        {
+            field = value;
+        }
+    }
+
+
 
     //internal ClaudeCodeAgentSession()
     //{
@@ -71,13 +56,6 @@ internal sealed class ClaudeCodeAgentSession : AgentSession
             if (this._chatHistoryProvider is null && value is null)
             {
                 return;
-            }
-
-            if (this.ConversationId != null)
-            {
-                // If we have a conversation id already, we shouldn't switch the session to use a ChatHistoryProvider
-                // since it means that the session will not work with the original agent anymore.
-                throw new InvalidOperationException("Only the ConversationId or ChatHistoryProvider may be set, but not both and switching from one to another is not supported.");
             }
             if (value == null)
             {

@@ -41,6 +41,20 @@ public class ClaudeCodeAIAgentOptions
 
     public Dictionary<string, string?>? EnvironmentVariables { get; set; }
 
+    /// <summary>
+    /// Gets or sets a factory function to create an instance of <see cref="ChatHistoryProvider"/>
+    /// which will be used to provide chat history for this agent.
+    /// </summary>
+    public Func<CcChatHistoryProviderFactoryContext, CancellationToken, ValueTask<ChatHistoryProvider>>? ChatHistoryProviderFactory { get; set; }
+
+    /// <summary>
+    /// Gets or sets a factory function to create an instance of <see cref="AIContextProvider"/>
+    /// which will be used to create a context provider for each new thread, and can then
+    /// provide additional context for each agent run.
+    /// </summary>
+    public Func<CcAIContextProviderFactoryContext, CancellationToken, ValueTask<AIContextProvider>>? AIContextProviderFactory { get; set; }
+
+
     public static ClaudeCodeAIAgentOptions? From(ClaudeCodeOptions? claudeCodeOptions)
     {
         if (claudeCodeOptions == null)

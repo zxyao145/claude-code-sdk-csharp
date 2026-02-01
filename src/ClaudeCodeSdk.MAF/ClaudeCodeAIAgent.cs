@@ -57,15 +57,44 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     }
 
 
-    public override ValueTask<AgentSession> GetNewSessionAsync(CancellationToken cancellationToken = default)
+    public override async ValueTask<AgentSession> GetNewSessionAsync(CancellationToken cancellationToken = default)
     {
-        AgentSession thread = NewThread();
-        return ValueTask.FromResult(thread);
+        AgentSession thread = await NewThread(cancellationToken);
+        return thread;
     }
 
-    private ClaudeCodeAgentSession NewThread()
+    private async Task<ClaudeCodeAgentSession> NewThread(CancellationToken cancellationToken = default)
     {
-        return new ClaudeCodeAgentSession();
+        var session = new ClaudeCodeAgentSession(_options.SessionId);
+        if (_options.ChatHistoryProviderFactory is not null) 
+        {
+            var chatHistoryProvider =
+                await _options.ChatHistoryProviderFactory
+                .Invoke(new()
+                {
+                    SerializedState = default,
+                    JsonSerializerOptions = null,
+                    SessionId = session.ConversationId,
+                }, cancellationToken)
+                .ConfigureAwait(false);
+            session.ChatHistoryProvider = chatHistoryProvider;
+        }
+
+
+        if(_options.AIContextProviderFactory is not null)
+        {
+            var contextProvider = await _options.AIContextProviderFactory
+                .Invoke(new() { 
+                    SerializedState = default, 
+                    JsonSerializerOptions = null,
+                    SessionId = session.ConversationId,
+                }, cancellationToken)
+                .ConfigureAwait(false);
+
+            session.AIContextProvider = contextProvider;
+        }
+
+        return session;
     }
 
     #region RunAsync
