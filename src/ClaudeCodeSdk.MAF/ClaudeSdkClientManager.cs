@@ -29,7 +29,7 @@ internal sealed class ClaudeSdkClientManager : IAsyncDisposable
         _logger = logger;
     }
 
-    public async ValueTask<ClaudeSdkClient> GetClientAsync(ClaudeCodeAgentThread claudeCodeAgent, CancellationToken cancellationToken = default)
+    public async ValueTask<ClaudeSdkClient> GetClientAsync(ClaudeCodeAgentSession claudeCodeAgent, CancellationToken cancellationToken = default)
     {
         return await GetClientAsync(claudeCodeAgent.SessionId, cancellationToken).ConfigureAwait(false);
     }

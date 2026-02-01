@@ -51,7 +51,7 @@ internal static class MafExample
 
         Console.WriteLine("maf MultiTurn turn 1");
         await using var agent = new ClaudeCodeAIAgent(options);
-        var thread = await agent.GetNewThreadAsync();
+        var thread = await agent.GetNewSessionAsync();
 
         var response = await agent.RunAsync("Tell me a joke about a pirate.", thread);
         foreach (var item in response.Messages)
