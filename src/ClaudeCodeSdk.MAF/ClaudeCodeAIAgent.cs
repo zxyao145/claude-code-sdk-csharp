@@ -25,7 +25,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// ClaudeCodeOptions.Resume will not working. Please replace with AgentThread
+    /// ClaudeCodeOptions.Resume will not working. Please replace with AgentSession
     /// 
     /// </summary>
     /// <param name="options"></param>
@@ -43,7 +43,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         _clientManager = new ClaudeSdkClientManager(_options.ToClaudeCodeOptions(), _logger);
     }
 
-    public override ValueTask<AgentThread> DeserializeThreadAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+    public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
         var sessionId = serializedThread.TryGetProperty("sessionId", out var sidProp)
             ? sidProp.GetString() : null;
@@ -52,32 +52,32 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             throw new Exception("ClaudeCodeAIAgent cannot get sessionId in DeserializeThread");
         }
         Guid guid = Guid.Parse(sessionId);
-        AgentThread thread = new ClaudeCodeAgentThread(guid);
+        AgentSession thread = new ClaudeCodeAgentSession(guid);
         return ValueTask.FromResult(thread);
     }
 
 
-    public override ValueTask<AgentThread> GetNewThreadAsync(CancellationToken cancellationToken = default)
+    public override ValueTask<AgentSession> GetNewSessionAsync(CancellationToken cancellationToken = default)
     {
-        AgentThread thread = NewThread();
+        AgentSession thread = NewThread();
         return ValueTask.FromResult(thread);
     }
 
-    private ClaudeCodeAgentThread NewThread()
+    private ClaudeCodeAgentSession NewThread()
     {
-        return new ClaudeCodeAgentThread();
+        return new ClaudeCodeAgentSession();
     }
 
     #region RunAsync
 
     protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
-        AgentThread? thread = null,
+        AgentSession? thread = null,
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default
         )
     {
-        var claudeThread = thread as ClaudeCodeAgentThread;
+        var claudeThread = thread as ClaudeCodeAgentSession;
         var messagesList = messages.ToList();
 
         // Convert messages to Claude format and send (exclude System messages)
@@ -138,11 +138,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
-        AgentThread? thread = null,
+        AgentSession? thread = null,
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var claudeThread = thread as ClaudeCodeAgentThread;
+        var claudeThread = thread as ClaudeCodeAgentSession;
         var messagesList = messages.ToList();
         var content = CombinedMessages(
                 messagesList.Where(m => m.Role == ChatRole.User)
@@ -187,7 +187,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     }
 
     private async Task<(IAsyncEnumerable<IMessage> Messages, ClaudeSdkClient? Client)> SendUserInput(
-        ClaudeCodeAgentThread? claudeThread,
+        ClaudeCodeAgentSession? claudeThread,
         string content,
         CancellationToken cancellationToken)
     {

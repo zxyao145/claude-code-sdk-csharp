@@ -9,7 +9,7 @@ namespace ClaudeCodeSdk.MAF;
 /// Provides a thread implementation for use with <see cref="ClaudeCodeAIAgent"/>.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-internal sealed class ClaudeCodeAgentThread : AgentThread
+internal sealed class ClaudeCodeAgentSession : AgentSession
 {
     /// <summary>
     /// Gets the session ID for the Claude Code conversation.
@@ -21,10 +21,10 @@ internal sealed class ClaudeCodeAgentThread : AgentThread
     public Guid SessionId { get; private set; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ClaudeCodeAgentThread"/> class.
+    /// Initializes a new instance of the <see cref="ClaudeCodeAgentSession"/> class.
     /// </summary>
     /// <param name="sessionId">Optional session ID to resume a previous conversation.</param>
-    internal ClaudeCodeAgentThread(Guid? sessionId = null)
+    internal ClaudeCodeAgentSession(Guid? sessionId = null)
     {
         SessionId = sessionId ?? Guid.NewGuid();
     }
