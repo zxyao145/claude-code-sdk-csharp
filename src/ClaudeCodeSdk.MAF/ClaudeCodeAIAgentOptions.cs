@@ -1,4 +1,6 @@
 ﻿using ClaudeCodeSdk.Types;
+using Microsoft.Agents.AI;
+using static Microsoft.Agents.AI.ChatClientAgentOptions;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -38,7 +40,6 @@ public class ClaudeCodeAIAgentOptions
     public string BaseUrl { get; set; } = string.Empty;
 
     public Dictionary<string, string?>? EnvironmentVariables { get; set; }
-
 
     public static ClaudeCodeAIAgentOptions? From(ClaudeCodeOptions? claudeCodeOptions)
     {
