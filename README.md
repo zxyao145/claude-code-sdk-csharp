@@ -2,6 +2,16 @@
 
 A .NET SDK for interacting with Claude through the Claude Code CLI, providing both one-shot queries and interactive client sessions with full Microsoft Agent Framework (MAF) integration.
 
+Example: [d-code](https://github.com/zxyao145/d-code).
+
+## Status & Version
+
+
+> [!NOTE]
+> The Microsoft Agent Framework is still in preview status, so the APIs for ClaudeCodeSdk.MAF may change between versions.
+
+[![NuGet Version (with prereleases)](https://img.shields.io/nuget/vpre/ClaudeCodeSdk?label=ClaudeCodeSdk)](https://www.nuget.org/packages/ClaudeCodeSdk/) [![NuGet Version (with prereleases)](https://img.shields.io/nuget/vpre/ClaudeCodeSdk.MAF?label=ClaudeCodeSdk.MAF)](https://www.nuget.org/packages/ClaudeCodeSdk.MAF/) [![CI/CD](https://github.com/zxyao145/claude-code-sdk-csharp/workflows/CI/badge.svg)](https://github.com/zxyao145/claude-code-sdk-csharp/actions)
+
 ## Features
 
 - ✅ **One-shot Queries** - Simple request/response pattern via `ClaudeQuery.QueryAsync`
@@ -16,16 +26,6 @@ A .NET SDK for interacting with Claude through the Claude Code CLI, providing bo
 - ✅ **.NET 10.0 Ready** - Built on the latest .NET platform (compatible with .NET 8.0+)
 - ✅ **Modern Async/Await** - Full `IAsyncDisposable` support with proper resource management
 
-## Version
-
-**Current Version**: `0.10.1-preview1`
-
-## Status
-
-[![CI/CD](https://github.com/zxyao145/claude-code-sdk-csharp/workflows/CI/badge.svg)](https://github.com/zxyao145/claude-code-sdk-csharp/actions)
-
-> [!NOTE]
-> This is a preview release. APIs may change between versions.
 
 ## Installation
 
@@ -233,7 +233,7 @@ var options = new ClaudeCodeOptions
     MaxTurns = 10,
     EnvironmentVariables = new Dictionary<string, string?>
     {
-        { "HTTP_PROXY", "http://proxy:8080" }
+        { "HTTP_PROXY", "http://proxy:1080" }
     }
 };
 ```
