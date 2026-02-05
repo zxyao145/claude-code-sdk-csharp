@@ -43,8 +43,8 @@ public class ClaudeCodeAIAgentOptions
     public static ClaudeCodeAIAgentOptions? From(ClaudeCodeOptions? claudeCodeOptions)
     {
         if (claudeCodeOptions == null)
-        { 
-            return null; 
+        {
+            return null;
         }
 
         var claudeCodeAIAgentOptions = new ClaudeCodeAIAgentOptions

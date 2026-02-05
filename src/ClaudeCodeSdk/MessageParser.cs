@@ -42,7 +42,7 @@ internal static class MessageParser
 
 
     private static IMessage ParseMessage(JsonElement jsonLine, ILogger? logger = null)
-     {
+    {
         if (jsonLine.ValueKind != JsonValueKind.Object)
         {
             throw new MessageParseException(
@@ -105,7 +105,7 @@ internal static class MessageParser
             return new UserMessage
             {
                 Id = GetRequiredString(msgData, UUID),
-                Content = content 
+                Content = content
             };
         }
         catch (Exception ex) when (ex is not MessageParseException)
@@ -354,11 +354,11 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            if(prop.ValueKind == JsonValueKind.String)
+            if (prop.ValueKind == JsonValueKind.String)
             {
                 return new Dictionary<string, object>()
                 {
-                    { "content" , prop.GetRawText()}, 
+                    { "content" , prop.GetRawText()},
                 };
             }
             return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
