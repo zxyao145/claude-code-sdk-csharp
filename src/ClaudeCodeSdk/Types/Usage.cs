@@ -43,4 +43,3 @@ public class CacheCreation
     [JsonPropertyName("ephemeral_5m_input_tokens")]
     public int Ephemeral5mInputTokens { get; set; }
 }
-

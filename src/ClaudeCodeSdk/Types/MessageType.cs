@@ -55,7 +55,7 @@ public readonly struct MessageType : IEquatable<MessageType>
         {
             return new(reader.GetString()!);
         }
-            
+
 
         public override void Write(Utf8JsonWriter writer, MessageType value, JsonSerializerOptions options)
         {
