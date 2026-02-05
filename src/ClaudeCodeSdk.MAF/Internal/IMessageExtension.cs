@@ -100,35 +100,36 @@ internal static partial class IMessageExtension
 
         foreach (var item in contents)
         {
-            if (item is TextBlock textBlock)
+            AIContent? content = item switch
             {
-                aiContents.Add(
-                    new TextContent($"{textBlock.Text}")
-                );
-            }
-            if (item is ErrorContentBlock errorBlock)
-            {
-                var res = new ErrorContent(errorBlock.Message);
-                aiContents.Add(res);
-            }
-            if (item is ThinkingBlock thinkingBlock)
-            {
-                var res = new TextReasoningContent(thinkingBlock.Thinking);
-                aiContents.Add(res);
-            }
+                TextBlock textBlock =>
+                    new TextContent(textBlock.Text),
 
-            if (item is ToolUseBlock toolUseBlock)
-            {
-                Dictionary<string, object?> arguments = toolUseBlock.Input
-                    .ToDictionary(x => x.Key, x => (object?)x.Value);
-                var funcall = new FunctionCallContent(toolUseBlock.Id, toolUseBlock.Name, arguments);
-                aiContents.Add(funcall);
-            }
+                ErrorContentBlock errorBlock =>
+                    new ErrorContent(errorBlock.Message),
 
-            if (item is ToolResultBlock toolResultBlock)
+                ThinkingBlock thinkingBlock =>
+                    new TextReasoningContent(thinkingBlock.Thinking),
+
+                ToolUseBlock toolUseBlock =>
+                    new FunctionCallContent(
+                        toolUseBlock.Id,
+                        toolUseBlock.Name,
+                        toolUseBlock.Input.ToDictionary(x => x.Key, x => (object?)x.Value)
+                    ),
+
+                ToolResultBlock toolResultBlock =>
+                    new FunctionResultContent(
+                        toolResultBlock.ToolUseId,
+                        toolResultBlock.ToolUseResult
+                    ),
+
+                _ => null
+            };
+
+            if (content != null)
             {
-                var res = new FunctionResultContent(toolResultBlock.ToolUseId, toolResultBlock.ToolUseResult);
-                aiContents.Add(res);
+                aiContents.Add(content);
             }
         }
 

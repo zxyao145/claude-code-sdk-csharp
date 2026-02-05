@@ -1,8 +1,6 @@
 using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
-using System.Data;
 using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ClaudeCodeSdk;
 
@@ -11,6 +9,8 @@ namespace ClaudeCodeSdk;
 /// </summary>
 internal static class MessageParser
 {
+    private const string UUID = "uuid";
+
     /// <summary>
     /// Parse message from CLI output into typed Message objects.
     /// </summary>
@@ -36,38 +36,38 @@ internal static class MessageParser
             return null;
         }
         //var jsonElement = JsonSerializer.SerializeToElement(line, JsonUtil.SNAKECASELOWER_OPTIONS);
-        var jsonElement = JsonUtil.SnakeCaseSerializeToElement(data);
-        return ParseMessage(jsonElement, logger);
+        var jsonLineElement = JsonUtil.SnakeCaseSerializeToElement(data);
+        return ParseMessage(jsonLineElement, logger);
     }
 
 
-    private static IMessage ParseMessage(JsonElement jsonElement, ILogger? logger = null)
+    private static IMessage ParseMessage(JsonElement jsonLine, ILogger? logger = null)
      {
-        if (jsonElement.ValueKind != JsonValueKind.Object)
+        if (jsonLine.ValueKind != JsonValueKind.Object)
         {
             throw new MessageParseException(
-                $"Invalid message data type (expected Object, got {jsonElement.ValueKind})",
-                jsonElement);
+                $"Invalid message data type (expected Object, got {jsonLine.ValueKind})",
+                jsonLine);
         }
 
-        if (!jsonElement.TryGetProperty("type", out JsonElement messageTypeEle))
+        if (!jsonLine.TryGetProperty("type", out JsonElement messageTypeEle))
         {
-            throw new MessageParseException("Message 'type' field is not found", jsonElement);
+            throw new MessageParseException("Message 'type' field is not found", jsonLine);
         }
 
         var messageType = messageTypeEle.GetString();
         if (string.IsNullOrWhiteSpace(messageType))
         {
-            throw new MessageParseException("Message 'type' field is null or empty", jsonElement);
+            throw new MessageParseException("Message 'type' field is null or empty", jsonLine);
         }
 
         return messageType switch
         {
-            "system" => ParseSystemMessage(jsonElement),
-            "assistant" => ParseAssistantMessage(jsonElement),
-            "user" => ParseUserMessage(jsonElement),
-            "result" => ParseResultMessage(jsonElement),
-            _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonElement)
+            "system" => ParseSystemMessage(jsonLine),
+            "assistant" => ParseAssistantMessage(jsonLine),
+            "user" => ParseUserMessage(jsonLine),
+            "result" => ParseResultMessage(jsonLine),
+            _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonLine)
         };
     }
 
@@ -104,7 +104,7 @@ internal static class MessageParser
 
             return new UserMessage
             {
-                Id = GetRequiredString(msgData, "uuid"),
+                Id = GetRequiredString(msgData, UUID),
                 Content = content 
             };
         }
@@ -118,11 +118,6 @@ internal static class MessageParser
     {
         try
         {
-            if (!msgData.TryGetProperty("uuid", out var uuidElement))
-            {
-                throw new MessageParseException("Missing 'uuid' field in assistant message", msgData);
-            }
-
             if (!msgData.TryGetProperty("message", out var messageElement))
             {
                 throw new MessageParseException("Missing 'message' field in assistant message", msgData);
@@ -150,7 +145,7 @@ internal static class MessageParser
                 {
                     return new AssistantMessage
                     {
-                        Id = uuidElement.GetString()!,
+                        Id = GetRequiredString(msgData, UUID),
                         Content = [new ErrorContentBlock(errorString)],
                         Model = modelElement.GetString()!,
                         SessionId = sessionIdElement.GetString()!,
@@ -167,7 +162,7 @@ internal static class MessageParser
 
             return new AssistantMessage
             {
-                Id = uuidElement.GetString()!,
+                Id = GetRequiredString(msgData, UUID),
                 Content = contentBlocks,
                 Model = modelElement.GetString()!,
                 SessionId = sessionIdElement.GetString()!,
@@ -179,30 +174,26 @@ internal static class MessageParser
         }
     }
 
-    private static SystemMessage ParseSystemMessage(JsonElement data)
+    private static SystemMessage ParseSystemMessage(JsonElement msgData)
     {
         try
         {
-            if (!data.TryGetProperty("subtype", out var subtypeElement))
+            if (!msgData.TryGetProperty("subtype", out var subtypeElement))
             {
-                throw new MessageParseException("Missing 'subtype' field in system message", data);
+                throw new MessageParseException("Missing 'subtype' field in system message", msgData);
             }
 
-            if (!data.TryGetProperty("session_id", out var sessionIdElement))
+            if (!msgData.TryGetProperty("session_id", out var sessionIdElement))
             {
-                throw new MessageParseException("Missing 'session_id' field in system message", data);
-            }
-            if (!data.TryGetProperty("uuid", out var uuidElement))
-            {
-                throw new MessageParseException("Missing 'uuid' field in system message", data);
+                throw new MessageParseException("Missing 'session_id' field in system message", msgData);
             }
 
-            var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(data.GetRawText());
+            var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(msgData.GetRawText());
             dataDict.Remove("subtype");
 
             return new SystemMessage
             {
-                Id = uuidElement.GetString()!,
+                Id = GetRequiredString(msgData, UUID),
                 Subtype = subtypeElement.GetString()!,
                 SessionId = sessionIdElement.GetString()!,
                 Data = dataDict
@@ -210,33 +201,33 @@ internal static class MessageParser
         }
         catch (Exception ex) when (ex is not MessageParseException)
         {
-            throw new MessageParseException($"Error parsing system message: {ex.Message}", data);
+            throw new MessageParseException($"Error parsing system message: {ex.Message}", msgData);
         }
     }
 
-    private static ResultMessage ParseResultMessage(JsonElement data)
+    private static ResultMessage ParseResultMessage(JsonElement msgData)
     {
         try
         {
             var result = new ResultMessage
             {
-                Id = GetRequiredString(data, "uuid"),
-                Subtype = GetRequiredString(data, "subtype"),
-                DurationApiMs = GetRequiredInt32(data, "duration_api_ms"),
-                DurationMs = GetRequiredInt32(data, "duration_ms"),
-                IsError = GetRequiredBoolean(data, "is_error"),
-                NumTurns = GetRequiredInt32(data, "num_turns"),
-                SessionId = GetRequiredString(data, "session_id"),
-                TotalCostUsd = GetOptionalDouble(data, "total_cost_usd"),
-                Usage = GetOptional<Usage>(data, "usage"),
-                Result = GetOptionalString(data, "result")
+                Id = GetRequiredString(msgData, UUID),
+                Subtype = GetRequiredString(msgData, "subtype"),
+                DurationApiMs = GetRequiredInt32(msgData, "duration_api_ms"),
+                DurationMs = GetRequiredInt32(msgData, "duration_ms"),
+                IsError = GetRequiredBoolean(msgData, "is_error"),
+                NumTurns = GetRequiredInt32(msgData, "num_turns"),
+                SessionId = GetRequiredString(msgData, "session_id"),
+                TotalCostUsd = GetOptionalDouble(msgData, "total_cost_usd"),
+                Usage = GetOptional<Usage>(msgData, "usage"),
+                Result = GetOptionalString(msgData, "result")
             };
 
             return result;
         }
         catch (Exception ex) when (ex is not MessageParseException)
         {
-            throw new MessageParseException($"Error parsing result message: {ex.Message}", data);
+            throw new MessageParseException($"Error parsing result message: {ex.Message}", msgData);
         }
     }
 
