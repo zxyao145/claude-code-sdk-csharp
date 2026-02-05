@@ -14,6 +14,8 @@ public class ClaudeSdkClient : IAsyncDisposable
     private ClaudeProcess? _process;
     private bool _disposed;
 
+    public ConnectStatus ConnectStatus { get; private set; }
+
     /// <summary>
     /// Initialize Claude SDK client for interactive sessions.
     /// </summary>
@@ -35,8 +37,10 @@ public class ClaudeSdkClient : IAsyncDisposable
         if (_process != null)
             throw new CLIConnectionException("Already connected. Call DisconnectAsync() first.");
 
+        ConnectStatus = ConnectStatus.Connecting;
         _process = new ClaudeProcess(_options, null, _logger);
         await _process.StartAsync(prompt ?? CreateEmptyStream(), cancellationToken);
+        ConnectStatus = ConnectStatus.Connected;
     }
 
     /// <summary>
@@ -114,7 +118,9 @@ public class ClaudeSdkClient : IAsyncDisposable
         if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
 
+        ConnectStatus = ConnectStatus.DisConnecting;
         await _process.InterruptAsync();
+        await this.DisposeAsync();
     }
 
     /// <summary>
@@ -140,9 +146,11 @@ public class ClaudeSdkClient : IAsyncDisposable
     {
         if (_process != null)
         {
+            ConnectStatus = ConnectStatus.DisConnecting;
             await _process.DisposeAsync();
             _process = null;
         }
+        ConnectStatus = ConnectStatus.DisConnected;
     }
 
     private static async IAsyncEnumerable<Dictionary<string, object>> CreateEmptyStream()

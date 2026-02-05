@@ -50,7 +50,9 @@ internal sealed class ClaudeSdkClientManager : IAsyncDisposable
         try
         {
             // Check if we need to create a new client for this session
-            if (_currentSessionId != sessionId || _client == null)
+            if (_currentSessionId != sessionId
+                || _client == null
+                || _client.ConnectStatus != ConnectStatus.Connected)
             {
                 // Dispose old client if it exists
                 if (_client != null)
