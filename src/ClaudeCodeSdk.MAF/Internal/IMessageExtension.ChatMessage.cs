@@ -50,7 +50,7 @@ internal static partial class IMessageExtension
         }
         else if (content is ErrorContentBlock errorBlock)
         {
-            return $"Error: {errorBlock.Message}";
+            return $"Error: {errorBlock.Message}, Details: {errorBlock.Details}";
         }
         throw new NotImplementedException();
     }

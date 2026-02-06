@@ -94,7 +94,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
             if (client != null && cancellationToken.IsCancellationRequested)
             {
-                await client.InterruptAsync(CancellationToken.None);
+                await InterruptAsync(client);
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
@@ -102,8 +102,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             {
                 if (client != null && cancellationToken.IsCancellationRequested)
                 {
-                    await client.InterruptAsync(CancellationToken.None);
-                    cancellationToken.ThrowIfCancellationRequested();
+                    await InterruptAsync(client);
                 }
 
                 if (claudeMessage is ResultMessage resultMessage)
@@ -154,7 +153,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
             if (client != null && cancellationToken.IsCancellationRequested)
             {
-                await client.InterruptAsync(CancellationToken.None);
+                await InterruptAsync(client);
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
@@ -163,8 +162,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             {
                 if (client != null && cancellationToken.IsCancellationRequested)
                 {
-                    await client.InterruptAsync(CancellationToken.None);
-                    cancellationToken.ThrowIfCancellationRequested();
+                    await InterruptAsync(client);
                 }
 
                 var update = claudeMessage.ToAgentRunResponseUpdate();
@@ -173,12 +171,18 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                     yield return update;
                 }
             }
+
         }
     }
 
 
     #endregion
 
+
+    private async Task InterruptAsync(ClaudeSdkClient client)
+    {
+        await client.InterruptAsync(CancellationToken.None);
+    }
 
     private string? CombinedMessages(IEnumerable<ChatMessage> userMessages)
     {
