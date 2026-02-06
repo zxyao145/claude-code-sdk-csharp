@@ -34,8 +34,6 @@ jobs:
         # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk (use absolute path)
         dotnet nuget add source "$GITHUB_WORKSPACE/src/ClaudeCodeSdk/bin/Release" --name local-temp
 
-        dotnet restore src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj --source "$GITHUB_WORKSPACE/src/ClaudeCodeSdk/bin/Release" --source "https://api.nuget.org/v3/index.json" -p:PackageVersion=${{ steps.version.outputs.VERSION }}
-
         # Build and pack ClaudeCodeSdk.MAF with local source
         dotnet build src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-restore -p:PackageVersion=${{ steps.version.outputs.VERSION }}
         dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
