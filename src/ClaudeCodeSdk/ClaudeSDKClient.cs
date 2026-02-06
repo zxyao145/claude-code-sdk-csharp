@@ -120,7 +120,7 @@ public class ClaudeSdkClient : IAsyncDisposable
 
         ConnectStatus = ConnectStatus.DisConnecting;
         await _process.InterruptAsync();
-        await this.DisposeAsync();
+        ConnectStatus = ConnectStatus.DisConnected;
     }
 
     /// <summary>

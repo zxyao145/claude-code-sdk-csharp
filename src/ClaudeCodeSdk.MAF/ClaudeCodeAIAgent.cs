@@ -100,11 +100,6 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
             await foreach (var claudeMessage in asyncEnumMsgs)
             {
-                if (client != null && cancellationToken.IsCancellationRequested)
-                {
-                    await InterruptAsync(client);
-                }
-
                 if (claudeMessage is ResultMessage resultMessage)
                 {
                     usageDetails = resultMessage.ToUsageDetails();
@@ -150,7 +145,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(content))
         {
             var (asyncEnumMsgs, client) = await SendUserInput(claudeThread, content, cancellationToken);
-
+           
             if (client != null && cancellationToken.IsCancellationRequested)
             {
                 await InterruptAsync(client);
@@ -160,11 +155,6 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             // Receive and yield responses
             await foreach (var claudeMessage in asyncEnumMsgs)
             {
-                if (client != null && cancellationToken.IsCancellationRequested)
-                {
-                    await InterruptAsync(client);
-                }
-
                 var update = claudeMessage.ToAgentRunResponseUpdate();
                 if (update != null)
                 {
@@ -203,14 +193,36 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         }
         else
         {
-            client = await _clientManager.GetClientAsync(claudeThread, cancellationToken);
+            client = await _clientManager.GetClientAsync(claudeThread, CancellationToken.None);
 
             await client.QueryAsync(content,
                  sessionId: claudeThread.SessionId.ToString(),
-                 cancellationToken: cancellationToken);
+                 cancellationToken: CancellationToken.None);
 
-            asyncEnumMsgs = client.ReceiveResponseAsync(cancellationToken);
+            asyncEnumMsgs = client.ReceiveResponseAsync(CancellationToken.None);
         }
+
+        // 
+        var interruptRequested = 0;
+        using var cancellationRegistration = cancellationToken.Register(() =>
+        {
+            if (client == null) return;
+            if (Interlocked.Exchange(ref interruptRequested, 1) != 0)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await InterruptAsync(client);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Failed to interrupt Claude SDK client during streaming cancellation");
+                }
+            });
+        });
+
 
         return (asyncEnumMsgs, client);
     }
