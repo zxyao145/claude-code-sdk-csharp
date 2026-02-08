@@ -17,18 +17,7 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 	</ItemGroup>
 
-	<Choose>
-		<When Condition="'$(Configuration)'=='Debug'">
-			<ItemGroup>
-				<ProjectReference Include="..\ClaudeCodeSdk\ClaudeCodeSdk.csproj" />
-			</ItemGroup>
-		</When>
-		<Otherwise>
-			<ItemGroup>
-				<PackageReference Include="ClaudeCodeSdk" />
-			</ItemGroup>
-		</Otherwise>
-	</Choose>
-
-
+	<ItemGroup>
+		<ProjectReference Include="..\ClaudeCodeSdk\ClaudeCodeSdk.csproj" />
+	</ItemGroup>
 </Project>

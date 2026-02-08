@@ -24,21 +24,12 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
-    - name: Build and pack ClaudeCodeSdk
+    - name: Build and pack
       run: |
-        dotnet build src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release --no-restore -p:PackageVersion=${{ steps.version.outputs.VERSION }}
-        dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
-
-    - name: Build and pack ClaudeCodeSdk.MAF
-      run: |
-        # Add local package source for ClaudeCodeSdk.MAF to find ClaudeCodeSdk (use absolute path)
-        dotnet nuget add source "$GITHUB_WORKSPACE/src/ClaudeCodeSdk/bin/Release" --name local-temp
-
-        # Build and pack ClaudeCodeSdk.MAF with local source
-        dotnet build src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-restore -p:PackageVersion=${{ steps.version.outputs.VERSION }}
-        dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+        dotnet build ./ClaudeCodeSdk.slnx -c Release --no-restore -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+        dotnet pack ./ClaudeCodeSdk.slnx -o ./releases -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 
     - name: Publish to NuGet.org
       run: |
-        dotnet nuget push "src/ClaudeCodeSdk/bin/Release/ClaudeCodeSdk.${{ steps.version.outputs.VERSION }}.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-        dotnet nuget push "src/ClaudeCodeSdk.MAF/bin/Release/ClaudeCodeSdk.MAF.${{ steps.version.outputs.VERSION }}.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        dotnet nuget push "./releases/ClaudeCodeSdk.${{ steps.version.outputs.VERSION }}.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        dotnet nuget push "./releases/ClaudeCodeSdk.MAF.${{ steps.version.outputs.VERSION }}.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
