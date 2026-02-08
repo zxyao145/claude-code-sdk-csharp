@@ -307,7 +307,7 @@ The integration automatically converts between Claude Code content blocks and MA
 
 ## Important Notes
 
-- **Resume Parameter**: The `ClaudeCodeOptions.Resume` parameter is managed automatically via `AgentThread` - do not set it manually
+- **Resume Parameter**: The `ClaudeCodeOptions.Resume` parameter is managed automatically via `AgentSession` - do not set it manually
 - **Thread Reuse**: Always pass the same thread object to maintain conversation context across multiple turns
 - **API Key**: Set via `ApiKey` property or `ANTHROPIC_AUTH_TOKEN` environment variable
 - **Tool Permissions**: Use `PermissionMode.Auto` for automatic tool approval, or `PermissionMode.Prompt` for manual approval
