@@ -123,6 +123,14 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     {
         if (_stderr != null)
         {
+            // ReadToEndAsync waits for EOF. For long-lived processes we should only drain stderr
+            // when the process has exited, otherwise this can block normal multi-turn flows.
+            if (_process?.HasExited != true)
+            {
+                _logger?.LogDebug("Skipping stderr drain because process is still running.");
+                return;
+            }
+
             var error = await _stderr.ReadToEndAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(error))
             {
