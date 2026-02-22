@@ -54,9 +54,9 @@ internal static class MafExample
 
         Console.WriteLine("maf MultiTurn turn 1");
         await using var agent = new ClaudeCodeAIAgent(options);
-        var thread = await agent.CreateSessionAsync();
+        var session = await agent.CreateSessionAsync();
 
-        var response = await agent.RunAsync("Tell me a joke about a pirate.", thread);
+        var response = await agent.RunAsync("Tell me a joke about a pirate.", session);
         foreach (var item in response.Messages)
         {
             Console.WriteLine("response message item: " + item);
@@ -65,7 +65,7 @@ internal static class MafExample
 
 
         Console.WriteLine("maf MultiTurn turn 2");
-        response = await agent.RunAsync("Now add some emojis to the joke and tell it in the voice of a pirate's parrot.", thread);
+        response = await agent.RunAsync("Now add some emojis to the joke and tell it in the voice of a pirate's parrot.", session);
         foreach (var item in response.Messages)
         {
             Console.WriteLine("response message item: " + item);

@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace ClaudeCodeSdk.MAF;
 
 /// <summary>
-/// Provides a thread implementation for use with <see cref="ClaudeCodeAIAgent"/>.
+/// Provides a AgentSession implementation for use with <see cref="ClaudeCodeAIAgent"/>.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed class ClaudeCodeAgentSession : AgentSession

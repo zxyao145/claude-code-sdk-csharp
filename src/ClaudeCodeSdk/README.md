@@ -39,7 +39,7 @@ using ClaudeCodeSdk.Types;
 
 var options = new ClaudeCodeOptions
 {
-    ApiKey = "your-api-key" // Or use ANTHROPIC_API_KEY env var
+    ApiKey = "your-api-key" // Or use ANTHROPIC_AUTH_TOKEN env var
 };
 
 await foreach (var message in ClaudeQuery.QueryAsync("What is 2 + 2?", options))
@@ -226,27 +226,23 @@ Configure Claude's behavior with `ClaudeCodeOptions`:
 var options = new ClaudeCodeOptions
 {
     // Authentication
-    ApiKey = "your-api-key",  // Or set ANTHROPIC_API_KEY env var
+    ApiKey = "your-api-key",  // Or set ANTHROPIC_AUTH_TOKEN env var
     BaseUrl = "https://api.anthropic.com",  // Custom API endpoint (optional)
 
     // Model configuration
     Model = "claude-sonnet-4-5",
     SystemPrompt = "You are a helpful assistant.",
     MaxTurns = 10,
-    MaxTokens = 4096,
+    MaxThinkingTokens = 4096,
 
     // Tools and permissions
     AllowedTools = new[] { "Read", "Write", "Bash", "Grep" },
-    BlockedTools = new[] { "WebSearch" },
-    PermissionMode = PermissionMode.Allow,  // or Deny/Ask
+    DisallowedTools = new[] { "WebSearch" },
+    PermissionMode = PermissionMode.acceptEdits,  // or plan/bypassPermissions/default
 
     // Session management
     Resume = "session-id",  // Resume previous session
     WorkingDirectory = "/path/to/project",
-
-    // Advanced options
-    EnableThinking = true,  // Show Claude's reasoning
-    CliPath = "/custom/path/to/claude-code",
     EnvironmentVariables = new Dictionary<string, string>
     {
         ["CUSTOM_VAR"] = "value"
@@ -256,9 +252,10 @@ var options = new ClaudeCodeOptions
 
 #### Permission Modes
 
-- **`PermissionMode.Allow`** - Auto-approve all tool executions
-- **`PermissionMode.Deny`** - Auto-deny all tool executions (read-only mode)
-- **`PermissionMode.Ask`** - Prompt user for each tool execution (default)
+- **`PermissionMode.@default`** - Use Claude Code's default permission behavior
+- **`PermissionMode.acceptEdits`** - Auto-accept edits/tools that require approval
+- **`PermissionMode.plan`** - Planning-oriented mode
+- **`PermissionMode.bypassPermissions`** - Bypass permission checks
 
 ### Using Tools
 
@@ -300,22 +297,19 @@ Configure Model Context Protocol (MCP) servers:
 ```csharp
 var options = new ClaudeCodeOptions
 {
-    McpServers = new IMcpServerConfig[]
+    McpServers = new Dictionary<string, IMcpServerConfig>
     {
-        new McpStdioServerConfig
+        ["my-server"] = new McpStdioServerConfig
         {
-            Name = "my-server",
             Command = "node",
             Args = new[] { "/path/to/server.js" }
         },
-        new McpSSEServerConfig
+        ["sse-server"] = new McpSSEServerConfig
         {
-            Name = "sse-server",
             Url = "http://localhost:3000/sse"
         },
-        new McpHttpServerConfig
+        ["http-server"] = new McpHttpServerConfig
         {
-            Name = "http-server",
             Url = "http://localhost:3000/messages"
         }
     }
@@ -437,14 +431,14 @@ await foreach (var response in ClaudeQuery.QueryAsync(messages))
 }
 ```
 
-### Enabling Thinking Mode
+### Configuring Thinking Budget
 
-See Claude's reasoning process:
+Control Claude's reasoning token budget:
 
 ```csharp
 var options = new ClaudeCodeOptions
 {
-    EnableThinking = true
+    MaxThinkingTokens = 12000
 };
 
 await foreach (var message in ClaudeQuery.QueryAsync("Solve this puzzle...", options))
@@ -623,7 +617,7 @@ using ClaudeCodeSdk.Types;
 var options = new ClaudeCodeOptions
 {
     AllowedTools = new[] { "Read", "Write", "Bash", "Grep" },
-    PermissionMode = PermissionMode.Allow,  // Auto-approve tools
+    PermissionMode = PermissionMode.acceptEdits,  // Auto-approve edits/tools
     WorkingDirectory = Directory.GetCurrentDirectory()
 };
 
@@ -660,7 +654,12 @@ await client.QueryAsync("What is dependency injection?");
 await foreach (var msg in client.ReceiveResponseAsync())
 {
     if (msg is AssistantMessage assistant)
-        Console.WriteLine(assistant.Content.GetText());
+    {
+        foreach (var block in assistant.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine(block.Text);
+        }
+    }
 }
 
 // Follow-up question (context preserved)
@@ -668,7 +667,12 @@ await client.QueryAsync("Show me a C# example");
 await foreach (var msg in client.ReceiveResponseAsync())
 {
     if (msg is AssistantMessage assistant)
-        Console.WriteLine(assistant.Content.GetText());
+    {
+        foreach (var block in assistant.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine(block.Text);
+        }
+    }
 }
 ```
 
@@ -721,7 +725,7 @@ For Microsoft Agent Framework (MAF) support, see the separate [ClaudeCodeSdk.MAF
 ### Key Features of MAF Integration
 
 - **`ClaudeCodeAIAgent`** - Implements MAF's `AIAgent` interface
-- **`ClaudeCodeAgentThread`** - Thread management with session ID persistence
+- **`ClaudeCodeAgentSession`** - Session management with session ID persistence
 - **`ClaudeSdkClientManager`** - Manages client lifecycle across sessions
 - **Streaming Support** - Both `RunAsync()` and `RunStreamingAsync()` available
 
@@ -748,18 +752,18 @@ npm install -g @anthropic-ai/claude-code
 
 **Possible Causes**:
 - CLI process failed to start
-- Invalid CLI path (use `CliPath` option to specify custom path)
+- `claude` executable is not available in `PATH`
 - Environment blocking subprocess execution
 
 **Solution**:
 ```csharp
 var options = new ClaudeCodeOptions
 {
-    CliPath = @"C:\full\path\to\claude-code.cmd"  // Windows
-    // or
-    CliPath = "/usr/local/bin/claude-code"  // Linux/macOS
+    WorkingDirectory = @"C:\your\project\path"  // Optional
 };
 ```
+
+Also ensure `claude` is resolvable from your shell (`which claude` / `where claude`).
 
 ### JSON Parsing Errors
 
@@ -780,7 +784,7 @@ var options = new ClaudeCodeOptions
 **Symptom**: Zombie `claude-code` processes
 
 **Solution**:
-- Always use `await using` for `ClaudeSdkClient` or `ClaudeQuery`
+- Always use `await using` for `ClaudeSdkClient`
 - Call `DisposeAsync()` explicitly if not using `await using`
 - Ensure all async operations are properly awaited
 

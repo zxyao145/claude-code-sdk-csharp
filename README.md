@@ -18,8 +18,8 @@ Example: [d-code](https://github.com/zxyao145/d-code).
 - ✅ **Interactive Client** - Bidirectional communication with `ClaudeSdkClient`
 - ✅ **Streaming Support** - Real-time response streaming via `IAsyncEnumerable<T>`
 - ✅ **Microsoft Agent Framework Integration** - Use Claude as an `AIAgent` (ClaudeCodeSdk.MAF)
-- ✅ **Session Management** - Multi-turn conversations with thread support and automatic session lifecycle management
-- ✅ **Thread Persistence** - Serialize/deserialize conversation threads for storage
+- ✅ **Session Management** - Multi-turn conversations with session support and automatic session lifecycle management
+- ✅ **Session Persistence** - Serialize/deserialize conversation sessions for storage
 - ✅ **Tool Integration** - Full support for Claude Code tools and MCP servers
 - ✅ **Thinking Blocks** - Extended reasoning with configurable thinking tokens
 - ✅ **Usage Tracking** - Token usage and cost monitoring
@@ -100,21 +100,21 @@ await using var agent = new ClaudeCodeAIAgent();
 var response = await agent.RunAsync("Explain async/await in C#");
 Console.WriteLine(response.Text);
 
-// Multi-turn conversation with thread
-var thread = agent.GetNewThread();
+// Multi-turn conversation with session
+var session = agent.CreateSessionAsync();
 var response1 = await agent.RunAsync(
     [new ChatMessage(ChatRole.User, "What is dependency injection?")],
-    thread: thread
+    session: session
 );
 
 // Context is automatically preserved across turns
 var response2 = await agent.RunAsync(
     [new ChatMessage(ChatRole.User, "Show me an example in C#")],
-    thread: thread
+    session: session
 );
 
 // Streaming with real-time updates
-await foreach (var update in agent.RunStreamingAsync("Tell me a story", thread: thread))
+await foreach (var update in agent.RunStreamingAsync("Tell me a story", session: session))
 {
     if (update.Contents != null)
     {
@@ -191,20 +191,20 @@ The MAF integration (`ClaudeCodeSdk.MAF`) provides:
 ### ClaudeCodeAIAgent
 - Full `AIAgent` implementation from Microsoft.Agents.AI
 - Streaming and non-streaming execution modes
-- Thread-based conversation management
+- Session-based conversation management
 - Automatic session persistence via `ClaudeSdkClientManager`
 - System prompt extraction and configuration
 
-### ClaudeCodeAgentThread
-- Thread serialization/deserialization for persistence
+### ClaudeCodeAgentSession
+- Session serialization/deserialization for persistence
 - Session ID management for conversation continuity
 - Compatible with MAF's `AIConversationState`
 
 ### ClaudeSdkClientManager
 - Automatic client lifecycle management
 - Disposes old clients when switching sessions
-- Thread-safe with proper async resource management
-- Optimizes resource usage across multiple threads
+- Session-safe with proper async resource management
+- Optimizes resource usage across multiple sessions
 
 ## Configuration
 
@@ -320,9 +320,9 @@ dotnet run --project examples/ClaudeCodeSdk.Examples.csproj
 - Use `await using` for automatic cleanup
 
 ### MAF Session Management
-- `ClaudeSdkClientManager` automatically handles client creation/disposal when switching threads
-- Thread session IDs map to Claude Code's `Resume` parameter for conversation continuity
-- Session state persists via the thread's `SessionId`
+- `ClaudeSdkClientManager` automatically handles client creation/disposal when switching sessions
+- Agent session IDs map to Claude Code's `Resume` parameter for conversation continuity
+- Session state persists via the session's `SessionId`
 
 ## Troubleshooting
 

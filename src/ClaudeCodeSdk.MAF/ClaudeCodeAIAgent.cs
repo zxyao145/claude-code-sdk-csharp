@@ -76,17 +76,17 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             throw new Exception("ClaudeCodeAIAgent cannot get sessionId in DeserializeThread");
         }
         Guid guid = Guid.Parse(sessionId);
-        AgentSession thread = new ClaudeCodeAgentSession(guid);
-        return ValueTask.FromResult(thread);
+        AgentSession session = new ClaudeCodeAgentSession(guid);
+        return ValueTask.FromResult(session);
     }
 
     protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
     {
-        AgentSession thread = NewThread();
-        return ValueTask.FromResult(thread);
+        AgentSession session = NewSession();
+        return ValueTask.FromResult(session);
     }
 
-    private ClaudeCodeAgentSession NewThread()
+    private ClaudeCodeAgentSession NewSession()
     {
         return new ClaudeCodeAgentSession();
     }
@@ -95,12 +95,12 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
-        AgentSession? thread = null,
+        AgentSession? session = null,
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default
         )
     {
-        var claudeThread = thread as ClaudeCodeAgentSession;
+        var claudeThread = session as ClaudeCodeAgentSession;
         var messagesList = messages.ToList();
 
         // Convert messages to Claude format and send (exclude System messages)
@@ -155,11 +155,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
-        AgentSession? thread = null,
+        AgentSession? session = null,
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var claudeThread = thread as ClaudeCodeAgentSession;
+        var claudeThread = session as ClaudeCodeAgentSession;
         var messagesList = messages.ToList();
         var content = CombinedMessages(
                 messagesList.Where(m => m.Role == ChatRole.User)
@@ -168,7 +168,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(content))
         {
             var (asyncEnumMsgs, client) = await SendUserInput(claudeThread, content, cancellationToken);
-           
+
             if (client != null && cancellationToken.IsCancellationRequested)
             {
                 await InterruptAsync(client);

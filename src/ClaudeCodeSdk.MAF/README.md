@@ -8,7 +8,7 @@ This package integrates ClaudeCodeSdk with Microsoft Agent Framework, enabling y
 
 - ✅ Streaming and non-streaming responses
 - ✅ Multi-turn conversations with automatic session management
-- ✅ Thread serialization/deserialization for persistence
+- ✅ Session serialization/deserialization for persistence
 - ✅ Tool use (function calling) support
 - ✅ Thinking/reasoning content blocks
 - ✅ Usage tracking and cost monitoring
@@ -32,20 +32,33 @@ dotnet add package ClaudeCodeSdk.MAF
 
 ```csharp
 using ClaudeCodeSdk.MAF;
-using ClaudeCodeSdk.Types;
+using Microsoft.Extensions.AI;
 
 // Create the Claude Code AI Agent
 var agent = new ClaudeCodeAIAgent();
 
 // Send a simple query
 var response = await agent.RunAsync("Hello! Can you help me with C# programming?");
-Console.WriteLine(response.Text);
+foreach (var message in response.Messages)
+{
+    if (message.Contents != null)
+    {
+        foreach (var content in message.Contents)
+        {
+            if (content is TextContent textContent)
+            {
+                Console.WriteLine(textContent.Text);
+            }
+        }
+    }
+}
 ```
 
 ### Streaming Responses
 
 ```csharp
 using ClaudeCodeSdk.MAF;
+using Microsoft.Extensions.AI;
 
 var agent = new ClaudeCodeAIAgent();
 
@@ -81,12 +94,15 @@ var messages = new[]
 };
 
 var response = await agent.RunAsync(messages);
-Console.WriteLine(response.Text);
+foreach (var message in response.Messages)
+{
+    Console.WriteLine(message);
+}
 ```
 
-**Note**: System messages are automatically extracted and set as the `SystemPrompt` in `ClaudeCodeOptions`. They are not sent as part of the conversation messages.
+**Note**: Current implementation sends only user-message text content to Claude Code. System messages are ignored.
 
-### Multi-turn Conversation with Thread
+### Multi-turn Conversation with Session
 
 ```csharp
 using ClaudeCodeSdk.MAF;
@@ -94,25 +110,31 @@ using Microsoft.Extensions.AI;
 
 var agent = new ClaudeCodeAIAgent();
 
-// Create a new thread for the conversation
-var thread = agent.GetNewThread();
+// Create a new session for the conversation
+var session = await agent.CreateSessionAsync();
 
 // First turn
 var response1 = await agent.RunAsync(
     [new ChatMessage(ChatRole.User, "What is dependency injection?")],
-    thread: thread
+    session: session
 );
-Console.WriteLine($"Claude: {response1.Text}");
+foreach (var message in response1.Messages)
+{
+    Console.WriteLine(message);
+}
 
 // Second turn - context is preserved via session ID
 var response2 = await agent.RunAsync(
     [new ChatMessage(ChatRole.User, "Can you show me an example in C#?")],
-    thread: thread
+    session: session
 );
-Console.WriteLine($"Claude: {response2.Text}");
+foreach (var message in response2.Messages)
+{
+    Console.WriteLine(message);
+}
 ```
 
-### Thread Persistence
+### Session Persistence
 
 ```csharp
 using System.Text.Json;
@@ -120,26 +142,29 @@ using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
 var agent = new ClaudeCodeAIAgent();
-var thread = agent.GetNewThread();
+var session = await agent.CreateSessionAsync();
 
 // Have a conversation
-await agent.RunAsync([new ChatMessage(ChatRole.User, "Hello!")], thread: thread);
+await agent.RunAsync([new ChatMessage(ChatRole.User, "Hello!")], session: session);
 
-// Serialize the thread for later use
-var serialized = await thread.SerializeAsync();
+// Serialize the session for later use
+var serialized = await agent.SerializeSessionAsync(session);
 var json = JsonSerializer.Serialize(serialized);
 // Save json to database or file...
 
 // Later: Deserialize and resume
 var restored = JsonSerializer.Deserialize<JsonElement>(json);
-var restoredThread = agent.DeserializeThread(restored);
+var restoredSession = await agent.DeserializeSessionAsync(restored);
 
 // Continue the conversation
 var response = await agent.RunAsync(
     [new ChatMessage(ChatRole.User, "What did we talk about?")],
-    thread: restoredThread
+    session: restoredSession
 );
-Console.WriteLine(response.Text);
+foreach (var message in response.Messages)
+{
+    Console.WriteLine(message);
+}
 ```
 
 ### Advanced Configuration
@@ -154,8 +179,8 @@ var options = new ClaudeCodeAIAgentOptions
 {
     MaxThinkingTokens = 10000,
     SystemPrompt = "You are an expert C# developer.",
-    Model = "claude-sonnet-4",
-    PermissionMode = PermissionMode.Auto,
+    Model = "claude-sonnet-4-5",
+    PermissionMode = PermissionMode.acceptEdits,
     ApiKey = "your-api-key" // Or set ANTHROPIC_AUTH_TOKEN environment variable
 };
 
@@ -166,7 +191,10 @@ var logger = loggerFactory.CreateLogger<ClaudeCodeAIAgent>();
 var agent = new ClaudeCodeAIAgent(options, logger);
 
 var response = await agent.RunAsync("Help me optimize this LINQ query...");
-Console.WriteLine(response.Text);
+foreach (var message in response.Messages)
+{
+    Console.WriteLine(message);
+}
 ```
 
 ### Working with Tool Calls
@@ -235,14 +263,14 @@ if (response.Usage != null)
 
 Main class implementing `AIAgent` from Microsoft.Agents.AI:
 
-- **GetNewThread()** - Creates a new conversation thread
+- **CreateSessionAsync()** - Creates a new conversation session
 - **RunAsync()** - Execute a query and get a complete response
 - **RunStreamingAsync()** - Execute a query with streaming updates
-- **DeserializeThread()** - Restore a persisted conversation thread
+- **DeserializeSessionAsync()** - Restore a persisted conversation session
 
-### ClaudeCodeAgentThread
+### ClaudeCodeAgentSession
 
-Internal thread implementation that:
+Internal session implementation that:
 - Maintains session ID for conversation continuity
 - Automatically captures session ID from first system message
 - Supports serialization for persistence (stores session ID)
@@ -256,8 +284,8 @@ Configuration options wrapper that extends ClaudeCodeOptions:
 | `MaxThinkingTokens` | Maximum tokens for Claude's reasoning (default: 8000) |
 | `SystemPrompt` | Custom system prompt |
 | `AppendSystemPrompt` | Additional system prompt to append |
-| `Model` | Claude model to use (e.g., "claude-sonnet-4") |
-| `PermissionMode` | Tool permission mode (Auto, Prompt, Deny) |
+| `Model` | Claude model to use (e.g., "claude-sonnet-4-5") |
+| `PermissionMode` | Tool permission mode (`@default`, `acceptEdits`, `plan`, `bypassPermissions`) |
 | `AllowedTools` | List of allowed tools |
 | `DisallowedTools` | List of disallowed tools |
 | `McpServers` | MCP server configurations |
@@ -285,20 +313,19 @@ The integration automatically converts between Claude Code content blocks and MA
 ## Key Behaviors
 
 ### System Message Handling
-- System messages in the input are extracted and set as `SystemPrompt` in `ClaudeCodeOptions`
-- They are not sent as part of the conversation messages to Claude Code CLI
-- Only the first system message is used if multiple are provided
+- Current implementation forwards only user-message text to Claude Code
+- System messages are currently ignored during request construction
 
 ### Session Management
-- Each thread maintains a `SessionId` that maps to Claude Code's session persistence
-- The session ID is automatically captured from the first `SystemMessage` received
-- Multi-turn conversations use the session ID via the `Resume` parameter
-- Threads can be serialized/deserialized with their session ID preserved
+- Each AgentSession maintains a `SessionId` that maps to Claude Code's session persistence
+- Session IDs are generated when creating/deserializing `ClaudeCodeAgentSession`
+- Multi-turn conversations use the session ID passed to `ClaudeSdkClient.QueryAsync(...)`
+- AgentSession can be serialized/deserialized with their session ID preserved
 
 ### Connection Lifecycle
-- Each `RunAsync()` or `RunStreamingAsync()` call creates a new `ClaudeSdkClient` connection
-- Connections are automatically disposed after each turn
-- Thread session state persists across connections
+- Non-session calls use one-shot `ClaudeQuery.QueryAsync(...)`
+- Session calls reuse a connected `ClaudeSdkClient` per session via `ClaudeSdkClientManager`
+- A new client is created when switching sessions or after disconnect/dispose
 
 ### Message Processing
 - **RunAsync()** - Collects all messages until `ResultMessage` and returns complete response
@@ -307,10 +334,10 @@ The integration automatically converts between Claude Code content blocks and MA
 
 ## Important Notes
 
-- **Resume Parameter**: The `ClaudeCodeOptions.Resume` parameter is managed automatically via `AgentSession` - do not set it manually
-- **Thread Reuse**: Always pass the same thread object to maintain conversation context across multiple turns
+- **Session Binding**: Conversation continuity is managed through the `AgentSession` you pass to `RunAsync`/`RunStreamingAsync`
+- **Session Reuse**: Always pass the same AgentSession object to maintain conversation context across multiple turns
 - **API Key**: Set via `ApiKey` property or `ANTHROPIC_AUTH_TOKEN` environment variable
-- **Tool Permissions**: Use `PermissionMode.Auto` for automatic tool approval, or `PermissionMode.Prompt` for manual approval
+- **Tool Permissions**: Use supported enum values (`@default`, `acceptEdits`, `plan`, `bypassPermissions`)
 
 ## Troubleshooting
 
@@ -332,11 +359,11 @@ var options = new ClaudeCodeAIAgentOptions { ApiKey = "your-api-key" };
 ```
 
 ### Session Not Persisting
-Ensure you're passing the same thread object to all `RunAsync()` calls:
+Ensure you're passing the same session object to all `RunAsync()` calls:
 ```csharp
-var thread = agent.GetNewThread();
-await agent.RunAsync([...], thread: thread); // First turn
-await agent.RunAsync([...], thread: thread); // Second turn uses same thread
+var session = await agent.CreateSessionAsync();
+await agent.RunAsync([...], session: session); // First turn
+await agent.RunAsync([...], session: session); // Second turn uses same session
 ```
 
 ## License
