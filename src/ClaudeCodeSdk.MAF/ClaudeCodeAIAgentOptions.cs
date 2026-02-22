@@ -2,7 +2,7 @@
 
 namespace ClaudeCodeSdk.MAF;
 
-public class ClaudeCodeAIAgentOptions
+public record ClaudeCodeAIAgentOptions
 {
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
     public int MaxThinkingTokens { get; init; } = 8000;

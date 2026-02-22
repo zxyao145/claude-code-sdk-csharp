@@ -30,19 +30,6 @@ internal sealed class ClaudeCodeAgentSession : AgentSession
     }
 
 
-    /// <inheritdoc/>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        var state = new ThreadState
-        {
-            SessionId = SessionId.ToString(),
-        };
-
-        return JsonSerializer.SerializeToElement(
-            state,
-            jsonSerializerOptions ?? new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-    }
-
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     private string DebuggerDisplay =>
         SessionId is { } sessionId

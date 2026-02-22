@@ -16,9 +16,10 @@ internal static class MafExample
 
     public static async Task BasicExample()
     {
-        var options = new ClaudeCodeAIAgentOptions();
-        options.EnvironmentVariables = EnvUtil.CreateEnv();
-
+        var options = new ClaudeCodeAIAgentOptions
+        {
+            EnvironmentVariables = EnvUtil.CreateEnv(),
+        };
 
         Console.WriteLine("maf BasicExample turn 1");
         await using var agent = new ClaudeCodeAIAgent(options);
@@ -45,13 +46,15 @@ internal static class MafExample
 
     public static async Task MultiTurn()
     {
-        var options = new ClaudeCodeAIAgentOptions();
-        options.EnvironmentVariables = EnvUtil.CreateEnv();
+        var options = new ClaudeCodeAIAgentOptions
+        {
+            EnvironmentVariables = EnvUtil.CreateEnv()
+        };
 
 
         Console.WriteLine("maf MultiTurn turn 1");
         await using var agent = new ClaudeCodeAIAgent(options);
-        var thread = await agent.GetNewSessionAsync();
+        var thread = await agent.CreateSessionAsync();
 
         var response = await agent.RunAsync("Tell me a joke about a pirate.", thread);
         foreach (var item in response.Messages)

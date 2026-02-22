@@ -43,7 +43,31 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         _clientManager = new ClaudeSdkClientManager(_options.ToClaudeCodeOptions(), _logger);
     }
 
-    public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+
+    protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session, nameof(session));
+
+        if (session is not ClaudeCodeAgentSession typedSession)
+        {
+            throw new InvalidOperationException($"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be serialized by this agent.");
+        }
+        var state = new ClaudeCodeAgentSession.ThreadState
+        {
+            SessionId = typedSession.SessionId.ToString(),
+        };
+
+        jsonSerializerOptions ??= new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var jsonElement = JsonSerializer.SerializeToElement
+            (
+                state,
+                jsonSerializerOptions
+            );
+        return new(jsonElement);
+    }
+
+
+    protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
         var sessionId = serializedThread.TryGetProperty("sessionId", out var sidProp)
             ? sidProp.GetString() : null;
@@ -56,8 +80,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         return ValueTask.FromResult(thread);
     }
 
-
-    public override ValueTask<AgentSession> GetNewSessionAsync(CancellationToken cancellationToken = default)
+    protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
     {
         AgentSession thread = NewThread();
         return ValueTask.FromResult(thread);
