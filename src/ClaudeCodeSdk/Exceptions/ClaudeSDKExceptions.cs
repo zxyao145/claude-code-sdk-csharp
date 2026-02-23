@@ -96,3 +96,16 @@ public class MessageParseException : ClaudeSDKException
         this.ExpData = data;
     }
 }
+
+/// <summary>
+/// Raised when unable to parse a message from CLI output.
+/// </summary>
+public class SessionIdDuplicateException : ClaudeSDKException
+{
+    public string? SessionId { get; }
+
+    public SessionIdDuplicateException(string? sessionId) : base($"Session ID {sessionId} is already in use.")
+    {
+        this.SessionId = sessionId;
+    }
+}

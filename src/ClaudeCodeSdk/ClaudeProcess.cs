@@ -20,6 +20,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     private Process? _process;
     private StreamWriter? _stdin;
     private StreamReader? _stdout;
+    private StreamReader? _stderr;
     private bool _disposed;
 
     public ClaudeProcess(ClaudeCodeOptions options, string? cliPath = null, ILogger? logger = null)
@@ -50,6 +51,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
             _stdin = _process.StandardInput;
             _stdout = _process.StandardOutput;
+            _stderr = _process.StandardError;
 
             if (prompt != null)
                 await SendInitialPromptAsync(prompt, cancellationToken);
@@ -59,6 +61,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             _logger?.LogError(ex, "Error starting process");
             await CleanupProcessAsync();
             throw;
+        }
+        if (_process.HasExited)
+        {
+            await TryReadStderr(cancellationToken);
         }
     }
 
@@ -108,6 +114,42 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
             if (msg.Type == MessageType.Result)
                 break;
+        }
+
+        await TryReadStderr(cancellationToken);
+    }
+
+    private async Task TryReadStderr(CancellationToken cancellationToken = default)
+    {
+        if (_stderr != null)
+        {
+            // ReadToEndAsync waits for EOF. For long-lived processes we should only drain stderr
+            // when the process has exited, otherwise this can block normal multi-turn flows.
+            if (_process?.HasExited != true)
+            {
+                _logger?.LogDebug("Skipping stderr drain because process is still running.");
+                return;
+            }
+
+            var error = await _stderr.ReadToEndAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(error))
+            {
+                _logger?.LogDebug("No error output from process stderr.");
+            }
+            else
+            {
+
+                _logger?.LogError("Error output from process stderr: {error}", error);
+                var exitCode = _process?.ExitCode ?? -1;
+                await CleanupProcessAsync();
+                if (error.Contains($"Error: Session ID")
+                    &&
+                    error.Contains($"is already in use."))
+                {
+                    throw new SessionIdDuplicateException(_options.SessionId?.ToString());
+                }
+                throw new ProcessException("Error from Claude CLI process", exitCode, error);
+            }
         }
     }
 
@@ -312,6 +354,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
         _stdout?.Dispose();
         _stdout = null;
+
+        _stderr?.Dispose();
+        _stderr = null;
     }
 
     public async ValueTask DisposeAsync()
