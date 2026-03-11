@@ -1,7 +1,7 @@
 using ClaudeCodeSdk.Types;
 using Microsoft.Agents.AI;
 using System.Diagnostics;
-using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -9,7 +9,7 @@ namespace ClaudeCodeSdk.MAF;
 /// Provides a AgentSession implementation for use with <see cref="ClaudeCodeAIAgent"/>.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-internal sealed class ClaudeCodeAgentSession : AgentSession
+public sealed class ClaudeCodeAgentSession : AgentSession
 {
     /// <summary>
     /// Gets the session ID for the Claude Code conversation.
@@ -18,7 +18,8 @@ internal sealed class ClaudeCodeAgentSession : AgentSession
     /// This property is set automatically when receiving the first <see cref="SystemMessage"/>
     /// from Claude Code that contains a session ID.
     /// </remarks>
-    public Guid SessionId { get; private set; }
+    [JsonPropertyName("sessionId")]
+    public Guid SessionId { get; internal set; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ClaudeCodeAgentSession"/> class.
@@ -30,14 +31,15 @@ internal sealed class ClaudeCodeAgentSession : AgentSession
     }
 
 
+    [JsonConstructor]
+    internal ClaudeCodeAgentSession(Guid sessionId, AgentSessionStateBag? stateBag) : base(stateBag ?? new())
+    {
+        this.SessionId = sessionId;
+    }
+
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     private string DebuggerDisplay =>
         SessionId is { } sessionId
-            ? $"SessionId = {sessionId}"
-            : "SessionId = (not set)";
-
-    internal sealed class ThreadState
-    {
-        public string? SessionId { get; set; }
-    }
+            ? $"SessionId = {sessionId}, StateBag Count = {this.StateBag.Count}"
+            : $"StateBag Count = {this.StateBag.Count}";
 }

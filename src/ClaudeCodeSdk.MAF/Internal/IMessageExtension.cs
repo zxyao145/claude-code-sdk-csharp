@@ -8,8 +8,6 @@ namespace ClaudeCodeSdk.MAF;
 internal static partial class IMessageExtension
 {
     private const string AGENT_NAME = "claude-code";
-    private static KeyValuePair<string, object?> AgentName =
-        new KeyValuePair<string, object?>("agentName", AGENT_NAME);
 
     public static AgentResponseUpdate? ToAgentRunResponseUpdate(this IMessage claudeMessage)
     {
@@ -23,7 +21,7 @@ internal static partial class IMessageExtension
                 AuthorName = assistantMsg.Model,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    AgentName,
+                    { "agentName", AGENT_NAME },
                     { "type", claudeMessage.Type.Value },
                 },
             };
@@ -40,7 +38,7 @@ internal static partial class IMessageExtension
 
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                     AgentName,
+                    { "agentName", AGENT_NAME },
                     { "type", claudeMessage.Type.Value },
                     { "subtype" , systemMessage.Subtype}
                 },
@@ -56,7 +54,7 @@ internal static partial class IMessageExtension
                 Role = ChatRole.User,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    AgentName,
+                    { "agentName", AGENT_NAME },
                     { "type", claudeMessage.Type.Value },
                 },
             };
@@ -89,7 +87,7 @@ internal static partial class IMessageExtension
                     Role = ChatRole.System,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        AgentName,
+                        { "agentName", AGENT_NAME },
                         { "type", claudeMessage.Type.Value },
                         { "subtype", resultMessage.Subtype },
                         { "totalCostUsd", resultMessage.TotalCostUsd  }
