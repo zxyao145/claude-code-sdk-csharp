@@ -1,9 +1,11 @@
 ﻿using ClaudeCodeSdk.Types;
+using Microsoft.Agents.AI;
 
 namespace ClaudeCodeSdk.MAF;
 
 public record ClaudeCodeAIAgentOptions
 {
+    #region ClaudeCodeOptions
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
     public int MaxThinkingTokens { get; init; } = 8000;
     public string? SystemPrompt { get; init; }
@@ -12,7 +14,7 @@ public record ClaudeCodeAIAgentOptions
     public string? McpServersPath { get; init; }
     public PermissionMode? PermissionMode { get; init; }
     public bool ContinueConversation { get; init; } = false;
-    
+
     public string? Resume { get; init; }
     public Guid? SessionId { get; init; }
 
@@ -40,6 +42,9 @@ public record ClaudeCodeAIAgentOptions
 
     public Dictionary<string, string?>? EnvironmentVariables { get; set; }
 
+    #endregion
+
+    public ChatHistoryProvider? ChatHistoryProvider { get; set; }
 
     public static ClaudeCodeAIAgentOptions? From(ClaudeCodeOptions? claudeCodeOptions)
     {

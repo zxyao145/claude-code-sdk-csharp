@@ -22,7 +22,7 @@ dotnet add package ClaudeCodeSdk.MAF
 
 ## Requirements
 
-- .NET 8.0 or later
+- .NET 10.0 SDK
 - Claude Code CLI installed (`npm install -g @anthropic-ai/claude-code`)
 - ANTHROPIC_AUTH_TOKEN environment variable set with your API key
 
@@ -35,7 +35,7 @@ using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
 // Create the Claude Code AI Agent
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 
 // Send a simple query
 var response = await agent.RunAsync("Hello! Can you help me with C# programming?");
@@ -60,7 +60,7 @@ foreach (var message in response.Messages)
 using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 
 await foreach (var update in agent.RunStreamingAsync("Explain async/await in C#"))
 {
@@ -79,13 +79,13 @@ await foreach (var update in agent.RunStreamingAsync("Explain async/await in C#"
 
 ### Using System Messages for Custom Prompts
 
-You can pass System messages to customize Claude's behavior for a specific request:
+You can include System messages in MAF requests, but they are currently ignored by Claude Code transport:
 
 ```csharp
 using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 
 var messages = new[]
 {
@@ -100,7 +100,7 @@ foreach (var message in response.Messages)
 }
 ```
 
-**Note**: Current implementation sends only user-message text content to Claude Code. System messages are ignored.
+**Note**: Current implementation sends only user-message text content to Claude Code. Use `ClaudeCodeAIAgentOptions.SystemPrompt` or `AppendSystemPrompt` for global instructions.
 
 ### Multi-turn Conversation with Session
 
@@ -108,7 +108,7 @@ foreach (var message in response.Messages)
 using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 
 // Create a new session for the conversation
 var session = await agent.CreateSessionAsync();
@@ -141,7 +141,7 @@ using System.Text.Json;
 using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 var session = await agent.CreateSessionAsync();
 
 // Have a conversation
@@ -166,6 +166,43 @@ foreach (var message in response.Messages)
     Console.WriteLine(message);
 }
 ```
+
+### Using ChatHistoryProvider
+
+`ClaudeCodeAIAgentOptions.ChatHistoryProvider` lets you plug in custom chat-history storage
+and retrieval (for example: database, Redis, or your own in-memory cache).
+
+At runtime:
+
+- `InvokingAsync(...)` runs **before** the request is sent and can prepend/merge history with incoming user messages.
+- `InvokedAsync(...)` runs **after** a response is received and can persist new request/response messages.
+
+Typical setup:
+
+```csharp
+using ClaudeCodeSdk.MAF;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+// Your ChatHistoryProvider implementation should load history in InvokingAsync
+// and save new request/response messages in InvokedAsync.
+var options = new ClaudeCodeAIAgentOptions
+{
+    ChatHistoryProvider = new MyChatHistoryProvider(),
+    SystemPrompt = "You are a helpful coding assistant."
+};
+
+await using var agent = new ClaudeCodeAIAgent(options);
+var session = await agent.CreateSessionAsync();
+
+var response = await agent.RunAsync(
+    [new ChatMessage(ChatRole.User, "Continue from our previous discussion.")],
+    session: session
+);
+```
+
+> [!TIP]
+> Keep passing the same `AgentSession` to preserve thread identity for your `ChatHistoryProvider` storage.
 
 ### Advanced Configuration
 
@@ -205,7 +242,7 @@ When Claude uses tools, the content is automatically converted to MAF types:
 using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 
 await foreach (var update in agent.RunStreamingAsync("What files are in the current directory?"))
 {
@@ -239,7 +276,7 @@ await foreach (var update in agent.RunStreamingAsync("What files are in the curr
 using ClaudeCodeSdk.MAF;
 using Microsoft.Extensions.AI;
 
-var agent = new ClaudeCodeAIAgent();
+await using var agent = new ClaudeCodeAIAgent();
 
 var response = await agent.RunAsync("Explain recursion");
 
@@ -297,6 +334,7 @@ Configuration options wrapper that extends ClaudeCodeOptions:
 | `ApiKey` | Anthropic API key (overrides ANTHROPIC_AUTH_TOKEN) |
 | `BaseUrl` | Custom API endpoint (overrides ANTHROPIC_BASE_URL) |
 | `EnvironmentVariables` | Additional environment variables |
+| `ChatHistoryProvider` | Custom history load/save hook (`InvokingAsync` / `InvokedAsync`) |
 
 ## Content Type Conversions
 
@@ -314,13 +352,14 @@ The integration automatically converts between Claude Code content blocks and MA
 
 ### System Message Handling
 - Current implementation forwards only user-message text to Claude Code
-- System messages are currently ignored during request construction
+- Per-request `ChatRole.System` messages are currently ignored during request construction
 
 ### Session Management
 - Each AgentSession maintains a `SessionId` that maps to Claude Code's session persistence
 - Session IDs are generated when creating/deserializing `ClaudeCodeAgentSession`
 - Multi-turn conversations use the session ID passed to `ClaudeSdkClient.QueryAsync(...)`
 - AgentSession can be serialized/deserialized with their session ID preserved
+- If `ChatHistoryProvider` is configured, the agent calls provider hooks before and after each run to load/store conversation history
 
 ### Connection Lifecycle
 - Non-session calls use one-shot `ClaudeQuery.QueryAsync(...)`
@@ -330,7 +369,7 @@ The integration automatically converts between Claude Code content blocks and MA
 ### Message Processing
 - **RunAsync()** - Collects all messages until `ResultMessage` and returns complete response
 - **RunStreamingAsync()** - Yields `AgentRunResponseUpdate` for each message received
-- Only user messages are sent to Claude Code (system messages become system prompts)
+- Only user-message text is sent to Claude Code
 
 ## Important Notes
 

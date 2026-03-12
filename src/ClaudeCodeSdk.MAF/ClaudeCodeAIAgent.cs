@@ -1,4 +1,5 @@
-﻿using ClaudeCodeSdk.Types;
+﻿using ClaudeCodeSdk.MAF.Utils;
+using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -41,8 +42,13 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         _options = options ?? new ClaudeCodeAIAgentOptions();
         _logger = logger;
         _clientManager = new ClaudeSdkClientManager(_options.ToClaudeCodeOptions(), _logger);
+        ChatHistoryProvider = options?.ChatHistoryProvider;
     }
 
+    public ChatHistoryProvider? ChatHistoryProvider { get; private set; }
+
+
+    #region Serialize and Deserialize
 
     protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
@@ -52,33 +58,36 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         {
             throw new InvalidOperationException($"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be serialized by this agent.");
         }
-        var state = new ClaudeCodeAgentSession.ThreadState
-        {
-            SessionId = typedSession.SessionId.ToString(),
-        };
 
-        jsonSerializerOptions ??= new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var jsonElement = JsonSerializer.SerializeToElement
-            (
-                state,
-                jsonSerializerOptions
-            );
+        var jso = jsonSerializerOptions ?? AgentSessionJsonUtil.ClaudeCodeAgentSession_OPTIONS;
+        var jsonElement = JsonSerializer
+            .SerializeToElement(typedSession, jso.GetTypeInfo(typeof(ClaudeCodeAgentSession)));
+
         return new(jsonElement);
     }
 
 
-    protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+    protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
-        var sessionId = serializedThread.TryGetProperty("sessionId", out var sidProp)
-            ? sidProp.GetString() : null;
-        if (string.IsNullOrWhiteSpace(sessionId))
+        if (serializedState.ValueKind != JsonValueKind.Object)
         {
-            throw new Exception("ClaudeCodeAIAgent cannot get sessionId in DeserializeThread");
+            throw new ArgumentException("The serialized session state must be a JSON object.", nameof(serializedState));
         }
-        Guid guid = Guid.Parse(sessionId);
-        AgentSession session = new ClaudeCodeAgentSession(guid);
-        return ValueTask.FromResult(session);
+        var jso = jsonSerializerOptions ?? AgentSessionJsonUtil.ClaudeCodeAgentSession_OPTIONS;
+
+
+        var deserializeSession = serializedState
+            .Deserialize(jso.GetTypeInfo(typeof(ClaudeCodeAgentSession)))
+            as ClaudeCodeAgentSession;
+        if (deserializeSession is null || deserializeSession.SessionId == Guid.Empty)
+        {
+            throw new ArgumentException("The serialized session state must contain a valid non-empty sessionId.", nameof(serializedState));
+        }
+
+        return new(deserializeSession);
     }
+
+    #endregion
 
     protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
     {
@@ -101,11 +110,15 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         )
     {
         var claudeThread = session as ClaudeCodeAgentSession;
-        var messagesList = messages.ToList();
+
+        (ClaudeCodeAgentSession safeSession,
+            IEnumerable<ChatMessage> userAndChatHistoryMessages)
+            = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
+
 
         // Convert messages to Claude format and send (exclude System messages)
         var content = CombinedMessages(
-                messagesList.Where(m => m.Role == ChatRole.User)
+                userAndChatHistoryMessages.Where(m => m.Role == ChatRole.User)
             );
 
         // Receive and collect all responses
@@ -138,6 +151,8 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             }
         }
 
+        await SaveNewMessagesAsync(safeSession, userAndChatHistoryMessages, responseMessages, cancellationToken);
+
         // Return complete response
         return new AgentResponse
         {
@@ -150,7 +165,6 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     #endregion
 
-
     #region RunStreamingAsync
 
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
@@ -160,9 +174,13 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var claudeThread = session as ClaudeCodeAgentSession;
-        var messagesList = messages.ToList();
+
+        (ClaudeCodeAgentSession safeSession,
+           IEnumerable<ChatMessage> userAndChatHistoryMessages)
+           = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
+
         var content = CombinedMessages(
-                messagesList.Where(m => m.Role == ChatRole.User)
+                userAndChatHistoryMessages.Where(m => m.Role == ChatRole.User)
             );
 
         if (!string.IsNullOrWhiteSpace(content))
@@ -175,19 +193,74 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            // Receive and yield responses
-            await foreach (var claudeMessage in asyncEnumMsgs)
+            if (ChatHistoryProvider is null)
             {
-                var update = claudeMessage.ToAgentRunResponseUpdate();
-                if (update != null)
+                await foreach (var claudeMessage in asyncEnumMsgs)
                 {
-                    yield return update;
+                    var update = claudeMessage.ToAgentRunResponseUpdate();
+                    if (update != null)
+                    {
+                        yield return update;
+                    }
                 }
             }
+            else
+            {
+                List<ChatMessage> responseMessages = new();
+                // Receive and yield responses
+                await foreach (var claudeMessage in asyncEnumMsgs)
+                {
+                    var update = claudeMessage.ToAgentRunResponseUpdate();
+                    if (update != null)
+                    {
+                        var chatMessage = update.ToChatMessage();
+                        responseMessages.Add(chatMessage);
+                        yield return update;
+                    }
+                }
 
+                await SaveNewMessagesAsync(safeSession, userAndChatHistoryMessages, responseMessages, cancellationToken);
+            }
         }
     }
 
+
+    #endregion
+
+
+    #region ChatHistoryProvider
+
+    private async ValueTask<(ClaudeCodeAgentSession AgentSession, IEnumerable<ChatMessage> HistoryMessages)> PrepareSessionAndMessagesAsync(
+        AgentSession? session,
+        IEnumerable<ChatMessage> inputMessages,
+        CancellationToken cancellationToken)
+    {
+        IEnumerable<ChatMessage> userAndChatHistoryMessages = inputMessages;
+        if (ChatHistoryProvider is not null)
+        {
+            var invokingContext = new ChatHistoryProvider.InvokingContext(this, session, inputMessages);
+            userAndChatHistoryMessages = await this.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
+        }
+        session ??= await this.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+        if (session is not ClaudeCodeAgentSession typedSession)
+        {
+            throw new InvalidOperationException($"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be used by this agent.");
+        }
+        return (typedSession, userAndChatHistoryMessages);
+    }
+
+    private async ValueTask SaveNewMessagesAsync(
+        ClaudeCodeAgentSession session,
+        IEnumerable<ChatMessage> requestMessages,
+        IEnumerable<ChatMessage> responseMessages,
+        CancellationToken cancellationToken)
+    {
+        if (ChatHistoryProvider is not null)
+        {
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, responseMessages);
+            await ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
+        }
+    }
 
     #endregion
 
