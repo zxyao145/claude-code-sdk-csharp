@@ -101,7 +101,7 @@ var response = await agent.RunAsync("Explain async/await in C#");
 Console.WriteLine(response.Text);
 
 // Multi-turn conversation with session
-var session = agent.CreateSessionAsync();
+var session = await agent.CreateSessionAsync();
 var response1 = await agent.RunAsync(
     [new ChatMessage(ChatRole.User, "What is dependency injection?")],
     session: session
@@ -130,6 +130,12 @@ await foreach (var update in agent.RunStreamingAsync("Tell me a story", session:
 ```
 
 See [ClaudeCodeSdk.MAF README](src/ClaudeCodeSdk.MAF/README.md) for complete MAF integration documentation.
+
+> [!IMPORTANT]
+> MAF currently forwards user-message text content to Claude Code. If you need a global instruction, configure `ClaudeCodeAIAgentOptions.SystemPrompt` (or `AppendSystemPrompt`) instead of relying on per-request `ChatRole.System` messages.
+
+> [!TIP]
+> For long-running conversations backed by your own storage, configure `ClaudeCodeAIAgentOptions.ChatHistoryProvider` to load history before each request and save new messages after each response.
 
 ## Architecture
 
