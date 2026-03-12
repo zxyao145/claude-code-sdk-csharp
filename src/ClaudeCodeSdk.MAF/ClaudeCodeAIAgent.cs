@@ -79,7 +79,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         var deserializeSession = serializedState
             .Deserialize(jso.GetTypeInfo(typeof(ClaudeCodeAgentSession)))
             as ClaudeCodeAgentSession;
-        deserializeSession ??= new ClaudeCodeAgentSession();
+        if (deserializeSession is null || deserializeSession.SessionId == Guid.Empty)
+        {
+            throw new ArgumentException("The serialized session state must contain a valid non-empty sessionId.", nameof(serializedState));
+        }
+
         return new(deserializeSession);
     }
 
@@ -106,7 +110,6 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         )
     {
         var claudeThread = session as ClaudeCodeAgentSession;
-        var messagesList = messages.ToList();
 
         (ClaudeCodeAgentSession safeSession,
             IEnumerable<ChatMessage> userAndChatHistoryMessages)
@@ -115,7 +118,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
         // Convert messages to Claude format and send (exclude System messages)
         var content = CombinedMessages(
-                messagesList.Where(m => m.Role == ChatRole.User)
+                userAndChatHistoryMessages.Where(m => m.Role == ChatRole.User)
             );
 
         // Receive and collect all responses
@@ -171,14 +174,13 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var claudeThread = session as ClaudeCodeAgentSession;
-        var messagesList = messages.ToList();
 
         (ClaudeCodeAgentSession safeSession,
            IEnumerable<ChatMessage> userAndChatHistoryMessages)
            = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
 
         var content = CombinedMessages(
-                messagesList.Where(m => m.Role == ChatRole.User)
+                userAndChatHistoryMessages.Where(m => m.Role == ChatRole.User)
             );
 
         if (!string.IsNullOrWhiteSpace(content))
@@ -233,7 +235,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         IEnumerable<ChatMessage> inputMessages,
         CancellationToken cancellationToken)
     {
-        IEnumerable<ChatMessage> userAndChatHistoryMessages = new List<ChatMessage>();
+        IEnumerable<ChatMessage> userAndChatHistoryMessages = inputMessages;
         if (ChatHistoryProvider is not null)
         {
             var invokingContext = new ChatHistoryProvider.InvokingContext(this, session, inputMessages);
