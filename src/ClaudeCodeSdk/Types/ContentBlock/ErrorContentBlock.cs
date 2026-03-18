@@ -23,4 +23,7 @@ public record ErrorContentBlock : ContentBlockBase, IContentBlock
 
     public string? Details { get; set; }
 
+    [JsonIgnore]
+    public string Type => "error";
+
 }

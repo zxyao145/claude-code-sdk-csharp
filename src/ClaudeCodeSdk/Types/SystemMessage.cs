@@ -7,8 +7,10 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record SystemMessage : IMessage
 {
+    [JsonPropertyName("uuid")]
     public string Id { get; init; } = "";
 
+    [JsonIgnore]
     public MessageType Type => MessageType.System;
 
     [JsonPropertyName("subtype")]

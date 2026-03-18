@@ -7,6 +7,9 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record ThinkingBlock : IContentBlock
 {
+    [JsonIgnore]
+    public string Type => "thinking";
+
     [JsonPropertyName("thinking")]
     public required string Thinking { get; init; }
 
