@@ -180,7 +180,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
            = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
 
         var content = CombinedMessages(
-                userAndChatHistoryMessages.Where(m => m.Role == ChatRole.User)
+                messages.Where(m => m.Role == ChatRole.User)
             );
 
         if (!string.IsNullOrWhiteSpace(content))
