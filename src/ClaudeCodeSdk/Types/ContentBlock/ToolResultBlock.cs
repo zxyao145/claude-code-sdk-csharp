@@ -7,8 +7,6 @@ namespace ClaudeCodeSdk.Types;
 /// </summary>
 public record ToolResultBlock : IContentBlock
 {
-    public string Type => "tool_result";
-
     [JsonPropertyName("tool_use_id")]
     public required string ToolUseId { get; init; }
 
