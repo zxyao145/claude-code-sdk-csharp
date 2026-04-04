@@ -5,7 +5,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-		<PackageVersion>0.10.4</PackageVersion>
+		<PackageVersion>10.0.0</PackageVersion>
 		<Title>Claude Code SDK for .NET</Title>
 		<Authors>zxyao</Authors>
 		<Description>.NET SDK for Claude Code</Description>

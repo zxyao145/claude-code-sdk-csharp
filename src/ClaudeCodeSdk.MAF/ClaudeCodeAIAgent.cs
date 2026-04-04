@@ -238,7 +238,9 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         IEnumerable<ChatMessage> userAndChatHistoryMessages = inputMessages;
         if (ChatHistoryProvider is not null)
         {
+#pragma warning disable MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             var invokingContext = new ChatHistoryProvider.InvokingContext(this, session, inputMessages);
+#pragma warning restore MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             userAndChatHistoryMessages = await this.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
         }
         session ??= await this.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
@@ -257,7 +259,9 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     {
         if (ChatHistoryProvider is not null)
         {
+#pragma warning disable MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, responseMessages);
+#pragma warning restore MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             await ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
         }
     }
