@@ -6,10 +6,6 @@ Example: [d-code](https://github.com/zxyao145/d-code).
 
 ## Status & Version
 
-
-> [!NOTE]
-> The Microsoft Agent Framework is still in preview status, so the APIs for ClaudeCodeSdk.MAF may change between versions.
-
 [![NuGet Version (with prereleases)](https://img.shields.io/nuget/vpre/ClaudeCodeSdk?label=ClaudeCodeSdk)](https://www.nuget.org/packages/ClaudeCodeSdk/) [![NuGet Version (with prereleases)](https://img.shields.io/nuget/vpre/ClaudeCodeSdk.MAF?label=ClaudeCodeSdk.MAF)](https://www.nuget.org/packages/ClaudeCodeSdk.MAF/) [![CI/CD](https://github.com/zxyao145/claude-code-sdk-csharp/workflows/CI/badge.svg)](https://github.com/zxyao145/claude-code-sdk-csharp/actions)
 
 ## Features
