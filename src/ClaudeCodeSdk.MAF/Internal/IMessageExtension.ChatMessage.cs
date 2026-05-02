@@ -21,9 +21,90 @@ internal static partial class IMessageExtension
                 new ChatMessage(
                     ChatRole.Assistant,
                     [new TextContent(JsonUtil.Serialize(textParts))]
-                );
+                )
+                {
+                    AuthorName = message.Model,
+                    MessageId = message.Id,
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        { "agentName", AGENT_NAME },
+                        { "type", message.Type.Value }
+                    }
+                };
             return assistantMessage;
         }
+
+        #region MyRegion
+
+        //if (claudeMessage is SystemMessage systemMessage)
+        //{
+        //    return new ChatMessage
+        //    {
+        //        MessageId = claudeMessage.Id,
+        //        Role = ChatRole.System,
+
+        //        AdditionalProperties = new AdditionalPropertiesDictionary
+        //        {
+        //            { "agentName", AGENT_NAME },
+        //            { "type", claudeMessage.Type.Value },
+        //            { "subtype" , systemMessage.Subtype}
+        //        },
+        //        Contents = [new TextContent($"{JsonUtil.Serialize(systemMessage.Data)}")],
+        //    };
+        //}
+
+        //if (claudeMessage is UserMessage userMessage)
+        //{
+        //    var res = new ChatMessage
+        //    {
+        //        MessageId = claudeMessage.Id,
+        //        Role = ChatRole.User,
+        //        AdditionalProperties = new AdditionalPropertiesDictionary
+        //        {
+        //            { "agentName", AGENT_NAME },
+        //            { "type", claudeMessage.Type.Value },
+        //        },
+        //    };
+
+        //    // Handle Content which can be string or List<IContentBlock>
+        //    if (userMessage.Content is string str)
+        //    {
+        //        res.Contents = [new TextContent($"{str}")];
+        //    }
+        //    else if (userMessage.Content is IEnumerable<IContentBlock> blocks)
+        //    {
+        //        res.Contents = ConvertContent(blocks);
+        //    }
+        //    else
+        //    {
+        //        res.Contents = [new TextContent($"{userMessage.Content?.ToString() ?? string.Empty}")];
+        //    }
+
+        //    return res;
+        //}
+
+        if (claudeMessage is ResultMessage resultMessage)
+        {
+            UsageDetails? usageDetails = ConvertUsageDetails(resultMessage);
+            if (usageDetails != null)
+            {
+                return new ChatMessage
+                {
+                    MessageId = claudeMessage.Id,
+                    Role = ChatRole.System,
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        { "agentName", AGENT_NAME },
+                        { "type", claudeMessage.Type.Value },
+                        { "subtype", resultMessage.Subtype },
+                        { "totalCostUsd", resultMessage.TotalCostUsd  }
+                    },
+                    Contents = [new UsageContent(usageDetails)],
+                };
+            }
+        }
+
+        #endregion
 
         return null;
     }

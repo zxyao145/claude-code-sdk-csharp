@@ -138,26 +138,28 @@ internal static class MessageParser
                 throw new MessageParseException("Missing 'session_id' field in assistant message", msgData);
             }
 
-            if (msgData.TryGetProperty("error", out var errorElement))
-            {
-                var errorString = errorElement.GetString()!;
-                if (!string.IsNullOrWhiteSpace(errorString))
-                {
-                    return new AssistantMessage
-                    {
-                        Id = GetRequiredString(msgData, UUID),
-                        Content = [new ErrorContentBlock(errorString)],
-                        Model = modelElement.GetString()!,
-                        SessionId = sessionIdElement.GetString()!,
-                    };
-                }
-            }
-
-
             var contentBlocks = new List<IContentBlock>();
             foreach (var blockElement in contentElement.EnumerateArray())
             {
                 contentBlocks.Add(ParseContentBlock(blockElement, msgData));
+            }
+
+
+            if (msgData.TryGetProperty("error", out var errorElement))
+            {
+                var errorString = errorElement.GetString() ?? "unknown error";
+                var errorBlock = new ErrorContentBlock(errorString)
+                {
+                    Details = contentElement.GetRawText()
+                };
+
+                return new AssistantMessage
+                {
+                    Id = GetRequiredString(msgData, UUID),
+                    Content = [errorBlock],
+                    Model = modelElement.GetString()!,
+                    SessionId = sessionIdElement.GetString()!,
+                };
             }
 
             return new AssistantMessage

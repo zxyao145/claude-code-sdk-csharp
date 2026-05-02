@@ -1,5 +1,6 @@
 ﻿using ClaudeCodeSdk.MAF;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace ClaudeCodeSdk.Examples;
@@ -17,6 +18,12 @@ internal static class MafExample
 
     public static async Task BasicExample()
     {
+        var logger = LoggerFactory.Create(builder =>
+        {
+            builder.AddConsole();
+            builder.SetMinimumLevel(LogLevel.Debug);
+        }).CreateLogger("MafExample");
+        
         var options = new ClaudeCodeAIAgentOptions
         {
             EnvironmentVariables = EnvUtil.CreateEnv(),

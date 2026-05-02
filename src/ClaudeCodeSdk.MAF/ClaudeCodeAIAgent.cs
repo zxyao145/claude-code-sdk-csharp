@@ -126,7 +126,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         UsageDetails? usageDetails = null;
         if (!string.IsNullOrWhiteSpace(content))
         {
-            var (asyncEnumMsgs, client) = await SendUserInput(claudeThread, content, cancellationToken);
+            var (asyncEnumMsgs, client) = await SendUserInput(null, content, cancellationToken);
 
             if (client != null && cancellationToken.IsCancellationRequested)
             {
