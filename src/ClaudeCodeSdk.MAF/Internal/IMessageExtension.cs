@@ -21,8 +21,7 @@ internal static partial class IMessageExtension
                 AuthorName = assistantMsg.Model,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    { "agentName", AGENT_NAME },
-                    { "type", claudeMessage.Type.Value },
+                    { "agentName", AGENT_NAME }, { "type", claudeMessage.Type.Value },
                 },
             };
             res.Contents = ConvertContent(assistantMsg.Content);
@@ -35,12 +34,11 @@ internal static partial class IMessageExtension
             {
                 MessageId = claudeMessage.Id,
                 Role = ChatRole.System,
-
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
                     { "agentName", AGENT_NAME },
                     { "type", claudeMessage.Type.Value },
-                    { "subtype" , systemMessage.Subtype}
+                    { "subtype", systemMessage.Subtype }
                 },
                 Contents = [new TextContent($"{JsonUtil.Serialize(systemMessage.Data)}")],
             };
@@ -54,8 +52,7 @@ internal static partial class IMessageExtension
                 Role = ChatRole.User,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    { "agentName", AGENT_NAME },
-                    { "type", claudeMessage.Type.Value },
+                    { "agentName", AGENT_NAME }, { "type", claudeMessage.Type.Value },
                 },
             };
 
@@ -78,8 +75,22 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is ResultMessage resultMessage)
         {
+            List<AIContent> contents = new List<AIContent>();
+
+            string? result = resultMessage.Result;
+            if (!string.IsNullOrWhiteSpace(result))
+            {
+                var textContent = new TextContent(result);
+                contents.Add(textContent);
+            }
+
             UsageDetails? usageDetails = ConvertUsageDetails(resultMessage);
             if (usageDetails != null)
+            {
+                contents.Add(new UsageContent(usageDetails));
+            }
+
+            if (contents.Count > 0)
             {
                 return new AgentResponseUpdate
                 {
@@ -90,9 +101,9 @@ internal static partial class IMessageExtension
                         { "agentName", AGENT_NAME },
                         { "type", claudeMessage.Type.Value },
                         { "subtype", resultMessage.Subtype },
-                        { "totalCostUsd", resultMessage.TotalCostUsd  }
+                        { "totalCostUsd", resultMessage.TotalCostUsd }
                     },
-                    Contents = [new UsageContent(usageDetails)],
+                    Contents = contents,
                 };
             }
         }
@@ -162,7 +173,7 @@ internal static partial class IMessageExtension
             CachedInputTokenCount = usage.CacheCreationInputTokens,
             AdditionalCounts = new AdditionalPropertiesDictionary<long>
             {
-                {"cacheReadInputTokens", usage.CacheReadInputTokens },
+                { "cacheReadInputTokens", usage.CacheReadInputTokens },
             }
         };
 

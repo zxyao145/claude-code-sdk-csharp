@@ -6,6 +6,12 @@ A .NET SDK for interacting with Claude through the Claude Code CLI, providing bo
 
 [![NuGet Version (with prereleases)](https://img.shields.io/nuget/vpre/ClaudeCodeSdk?label=ClaudeCodeSdk)](https://www.nuget.org/packages/ClaudeCodeSdk/) [![NuGet Version (with prereleases)](https://img.shields.io/nuget/vpre/ClaudeCodeSdk.MAF?label=ClaudeCodeSdk.MAF)](https://www.nuget.org/packages/ClaudeCodeSdk.MAF/) [![CI/CD](https://github.com/zxyao145/claude-code-sdk-csharp/workflows/CI/badge.svg)](https://github.com/zxyao145/claude-code-sdk-csharp/actions)
 
+Package versions use the format `x.y.z` and may include a `-preview` suffix for prerelease builds.
+
+- `x` follows the target .NET version.
+- `y` is incremented when the library introduces breaking changes or updates its Microsoft Agent Framework dependency.
+- `z` is incremented for library patch releases.
+
 ## Features
 
 - ✅ **One-shot Queries** - Simple request/response pattern via `ClaudeQuery.QueryAsync`
