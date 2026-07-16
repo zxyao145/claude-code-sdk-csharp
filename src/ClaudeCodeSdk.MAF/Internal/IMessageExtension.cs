@@ -78,7 +78,20 @@ internal static partial class IMessageExtension
             List<AIContent> contents = new List<AIContent>();
 
             string? result = resultMessage.Result;
-            if (!string.IsNullOrWhiteSpace(result))
+            if (resultMessage.IsError)
+            {
+                contents.Add(new ErrorContent(
+                    string.IsNullOrWhiteSpace(result)
+                        ? $"Claude Code execution failed: {resultMessage.Subtype}."
+                        : result)
+                {
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        ["isTerminalError"] = true,
+                    },
+                });
+            }
+            else if (!string.IsNullOrWhiteSpace(result))
             {
                 var textContent = new TextContent(result);
                 contents.Add(textContent);
@@ -117,13 +130,27 @@ internal static partial class IMessageExtension
 
         foreach (var item in contents)
         {
+            if (item is ToolResultBlock toolResultBlock)
+            {
+                aiContents.Add(new FunctionResultContent(
+                    toolResultBlock.ToolUseId,
+                    toolResultBlock.ToolUseResult));
+
+                if (toolResultBlock.IsError == true)
+                {
+                    aiContents.Add(new ErrorContent(GetToolResultErrorMessage(toolResultBlock)));
+                }
+
+                continue;
+            }
+
             AIContent? content = item switch
             {
                 TextBlock textBlock =>
                     new TextContent(textBlock.Text),
 
                 ErrorContentBlock errorBlock =>
-                    new ErrorContent(errorBlock.Message),
+                    new ErrorContent(errorBlock.Message ?? "Claude Code execution failed."),
 
                 ThinkingBlock thinkingBlock =>
                     new TextReasoningContent(thinkingBlock.Thinking),
@@ -133,12 +160,6 @@ internal static partial class IMessageExtension
                         toolUseBlock.Id,
                         toolUseBlock.Name,
                         toolUseBlock.Input.ToDictionary(x => x.Key, x => (object?)x.Value)
-                    ),
-
-                ToolResultBlock toolResultBlock =>
-                    new FunctionResultContent(
-                        toolResultBlock.ToolUseId,
-                        toolResultBlock.ToolUseResult
                     ),
 
                 _ => null
@@ -151,6 +172,16 @@ internal static partial class IMessageExtension
         }
 
         return aiContents;
+    }
+
+    private static string GetToolResultErrorMessage(ToolResultBlock toolResultBlock)
+    {
+        if (toolResultBlock.Content is string message && !string.IsNullOrWhiteSpace(message))
+        {
+            return message;
+        }
+
+        return $"Claude Code tool call '{toolResultBlock.ToolUseId}' failed.";
     }
 
     public static UsageDetails? ToUsageDetails(this ResultMessage resultMessage)

@@ -139,13 +139,30 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 if (claudeMessage is ResultMessage resultMessage)
                 {
                     usageDetails = resultMessage.ToUsageDetails();
-                }
-                else
-                {
-                    var assistantMessage = claudeMessage.ToChatMessage();
-                    if (assistantMessage != null)
+                    if (resultMessage.IsError)
                     {
-                        responseMessages.Add(assistantMessage);
+                        var update = resultMessage.ToAgentRunResponseUpdate();
+                        if (update != null)
+                        {
+                            responseMessages.Add(update.ToChatMessage());
+                        }
+                    }
+                }
+                else if (claudeMessage is AssistantMessage assistantMessage)
+                {
+                    if (assistantMessage.Content.Any(content =>
+                            content is ErrorContentBlock ||
+                            content is ToolResultBlock { IsError: true }))
+                    {
+                        var update = assistantMessage.ToAgentRunResponseUpdate();
+                        if (update != null)
+                        {
+                            responseMessages.Add(update.ToChatMessage());
+                        }
+                    }
+                    else
+                    {
+                        responseMessages.Add(assistantMessage.ToChatMessage());
                     }
                 }
             }
