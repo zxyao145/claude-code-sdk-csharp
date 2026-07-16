@@ -30,6 +30,10 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is SystemMessage systemMessage)
         {
+            AIContent content = string.Equals(systemMessage.Subtype, "api_retry", StringComparison.Ordinal)
+                ? new ErrorContent(GetApiRetryErrorMessage(systemMessage))
+                : new TextContent(JsonUtil.Serialize(systemMessage.Data));
+
             return new AgentResponseUpdate
             {
                 MessageId = claudeMessage.Id,
@@ -40,7 +44,7 @@ internal static partial class IMessageExtension
                     { "type", claudeMessage.Type.Value },
                     { "subtype", systemMessage.Subtype }
                 },
-                Contents = [new TextContent($"{JsonUtil.Serialize(systemMessage.Data)}")],
+                Contents = [content],
             };
         }
 
@@ -78,7 +82,20 @@ internal static partial class IMessageExtension
             List<AIContent> contents = new List<AIContent>();
 
             string? result = resultMessage.Result;
-            if (!string.IsNullOrWhiteSpace(result))
+            if (resultMessage.IsError)
+            {
+                contents.Add(new ErrorContent(
+                    string.IsNullOrWhiteSpace(result)
+                        ? $"Claude Code execution failed: {resultMessage.Subtype}."
+                        : result)
+                {
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        ["isFatalError"] = true,
+                    },
+                });
+            }
+            else if (!string.IsNullOrWhiteSpace(result))
             {
                 var textContent = new TextContent(result);
                 contents.Add(textContent);
@@ -117,13 +134,27 @@ internal static partial class IMessageExtension
 
         foreach (var item in contents)
         {
+            if (item is ToolResultBlock toolResultBlock)
+            {
+                aiContents.Add(new FunctionResultContent(
+                    toolResultBlock.ToolUseId,
+                    toolResultBlock.ToolUseResult));
+
+                if (toolResultBlock.IsError == true)
+                {
+                    aiContents.Add(new ErrorContent(GetToolResultErrorMessage(toolResultBlock)));
+                }
+
+                continue;
+            }
+
             AIContent? content = item switch
             {
                 TextBlock textBlock =>
                     new TextContent(textBlock.Text),
 
                 ErrorContentBlock errorBlock =>
-                    new ErrorContent(errorBlock.Message),
+                    new ErrorContent(errorBlock.Message ?? "Claude Code execution failed, unknown cause."),
 
                 ThinkingBlock thinkingBlock =>
                     new TextReasoningContent(thinkingBlock.Thinking),
@@ -133,12 +164,6 @@ internal static partial class IMessageExtension
                         toolUseBlock.Id,
                         toolUseBlock.Name,
                         toolUseBlock.Input.ToDictionary(x => x.Key, x => (object?)x.Value)
-                    ),
-
-                ToolResultBlock toolResultBlock =>
-                    new FunctionResultContent(
-                        toolResultBlock.ToolUseId,
-                        toolResultBlock.ToolUseResult
                     ),
 
                 _ => null
@@ -151,6 +176,34 @@ internal static partial class IMessageExtension
         }
 
         return aiContents;
+    }
+
+    private static string GetApiRetryErrorMessage(SystemMessage systemMessage)
+    {
+        var attempt = GetSystemDataText(systemMessage.Data, "attempt");
+        var maxRetries = GetSystemDataText(systemMessage.Data, "max_retries");
+        var error = GetSystemDataText(systemMessage.Data, "error");
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            error = "unknown";
+        }
+
+        return string.IsNullOrWhiteSpace(attempt) || string.IsNullOrWhiteSpace(maxRetries)
+            ? $"Claude Code API retry: {error}"
+            : $"Claude Code API retry {attempt}/{maxRetries}: {error}";
+    }
+
+    private static string? GetSystemDataText(IReadOnlyDictionary<string, object> data, string key) =>
+        data.TryGetValue(key, out var value) ? value?.ToString() : null;
+
+    private static string GetToolResultErrorMessage(ToolResultBlock toolResultBlock)
+    {
+        if (toolResultBlock.Content is string message && !string.IsNullOrWhiteSpace(message))
+        {
+            return message;
+        }
+
+        return $"Claude Code tool call '{toolResultBlock.ToolUseId}' failed, unknown cause.";
     }
 
     public static UsageDetails? ToUsageDetails(this ResultMessage resultMessage)
@@ -168,6 +221,7 @@ internal static partial class IMessageExtension
 
         var usageDetails = new UsageDetails
         {
+            TotalTokenCount = usage.InputTokens + usage.OutputTokens,
             InputTokenCount = usage.InputTokens,
             OutputTokenCount = usage.OutputTokens,
             CachedInputTokenCount = usage.CacheCreationInputTokens,
