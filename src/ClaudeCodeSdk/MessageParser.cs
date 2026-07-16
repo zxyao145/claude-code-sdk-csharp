@@ -243,13 +243,24 @@ internal static class MessageParser
 
         var blockType = typeElement.GetString();
 
-        bool isError = false;
+        bool? isError = null;
         if (blockElement.TryGetProperty("is_error", out var isErrorElement))
         {
             isError = isErrorElement.GetBoolean();
         }
 
-        if (!isError)
+        if (blockType == "tool_result")
+        {
+            return new ToolResultBlock
+            {
+                ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
+                Content = GetOptionalObject(blockElement, "content"),
+                ToolUseResult = GetOptionalDictionary(msgData, "tool_use_result") ?? new Dictionary<string, object>(),
+                IsError = isError
+            };
+        }
+
+        if (isError != true)
         {
             return blockType switch
             {
@@ -267,13 +278,6 @@ internal static class MessageParser
                     Id = GetRequiredString(blockElement, "id"),
                     Name = GetRequiredString(blockElement, "name"),
                     Input = GetRequiredDictionary(blockElement, "input")
-                },
-                "tool_result" => new ToolResultBlock
-                {
-                    ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
-                    Content = GetOptionalObject(blockElement, "content"),
-                    ToolUseResult = GetOptionalDictionary(msgData, "tool_use_result") ?? new Dictionary<string, object>(),
-                    IsError = GetOptionalBoolean(blockElement, "is_error")
                 },
                 _ => throw new MessageParseException($"Unknown content block type: {blockType}", blockElement)
             };
@@ -325,18 +329,13 @@ internal static class MessageParser
         return element.TryGetProperty(propertyName, out var prop) ? prop.GetDouble() : null;
     }
 
-    private static bool? GetOptionalBoolean(JsonElement element, string propertyName)
-    {
-        return element.TryGetProperty(propertyName, out var prop) ? prop.GetBoolean() : null;
-    }
-
     private static object? GetOptionalObject(JsonElement element, string propertyName)
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
             if (prop.ValueKind == JsonValueKind.String)
             {
-                return prop.GetRawText();
+                return prop.GetString();
             }
             return JsonUtil.SnakeCaseDeserialize<object>(prop.GetRawText());
         }

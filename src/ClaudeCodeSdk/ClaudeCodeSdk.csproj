@@ -8,6 +8,7 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="ClaudeCodeSdk.MAF" />
+		<InternalsVisibleTo Include="ClaudeCodeSdk.Tests" />
 	</ItemGroup>
 	
 	<ItemGroup>

@@ -140,13 +140,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 {
                     usageDetails = resultMessage.ToUsageDetails();
                 }
-                else
+
+                var responseMessage = claudeMessage.ToChatMessage();
+                if (responseMessage != null)
                 {
-                    var assistantMessage = claudeMessage.ToChatMessage();
-                    if (assistantMessage != null)
-                    {
-                        responseMessages.Add(assistantMessage);
-                    }
+                    responseMessages.Add(responseMessage);
                 }
             }
         }
