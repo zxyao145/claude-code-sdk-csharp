@@ -118,8 +118,8 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
         // Convert messages to Claude format and send (exclude System messages)
         var content = CombinedMessages(
-                userAndChatHistoryMessages.Where(m => m.Role == ChatRole.User)
-            );
+            messages.Where(m => m.Role == ChatRole.User)
+        );
 
         // Receive and collect all responses
         var responseMessages = new List<ChatMessage>();
