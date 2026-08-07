@@ -47,6 +47,8 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     public ChatHistoryProvider? ChatHistoryProvider { get; private set; }
 
+    public override string Name => "ClaudeCode";
+
 
     #region Serialize and Deserialize
 
