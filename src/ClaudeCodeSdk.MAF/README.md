@@ -11,6 +11,7 @@ This package integrates ClaudeCodeSdk with Microsoft Agent Framework, enabling y
 - ✅ Session serialization/deserialization for persistence
 - ✅ Tool use (function calling) support
 - ✅ Thinking/reasoning content blocks
+- ✅ Image `DataContent` inputs, including image-only messages
 - ✅ Usage tracking and cost monitoring
 - ✅ Compatible with Microsoft.Extensions.AI interfaces
 
@@ -100,7 +101,7 @@ foreach (var message in response.Messages)
 }
 ```
 
-**Note**: Current implementation sends only user-message text content to Claude Code. Use `ClaudeCodeAIAgentOptions.SystemPrompt` or `AppendSystemPrompt` for global instructions.
+**Note**: User messages may contain text and image `DataContent`. System messages are not sent as message content; use `ClaudeCodeAIAgentOptions.SystemPrompt` or `AppendSystemPrompt` for global instructions.
 
 ### Multi-turn Conversation with Session
 
