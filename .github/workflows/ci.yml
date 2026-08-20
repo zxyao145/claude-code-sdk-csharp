@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ "**" ]
+    branches:
+      - main
+
   pull_request:
-    branches: [ "**" ]
+    branches:
+      - main
 
 jobs:
   build-and-test:
@@ -44,3 +47,16 @@ jobs:
         # Build and pack ClaudeCodeSdk.MAF with local source
         dotnet build src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release
         dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release --no-build
+
+  ci-success:
+    name: CI Success
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Verify matrix jobs
+        run: |
+          if [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            exit 1
+          fi
