@@ -50,10 +50,14 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is UserMessage userMessage)
         {
+            var blocks = (userMessage.Content as IEnumerable<IContentBlock>)?.ToList();
+            var role = blocks is { Count: > 0 } && blocks.All(static block => block is ToolResultBlock)
+                ? ChatRole.Tool
+                : ChatRole.User;
             var res = new AgentResponseUpdate
             {
                 MessageId = claudeMessage.Id,
-                Role = ChatRole.User,
+                Role = role,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
                     { "agentName", AGENT_NAME }, { "type", claudeMessage.Type.Value },
@@ -65,7 +69,7 @@ internal static partial class IMessageExtension
             {
                 res.Contents = [new TextContent($"{str}")];
             }
-            else if (userMessage.Content is IEnumerable<IContentBlock> blocks)
+            else if (blocks != null)
             {
                 res.Contents = ConvertContent(blocks);
             }
