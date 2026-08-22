@@ -201,6 +201,54 @@ public class MafErrorContentTests
     }
 
     [Fact]
+    public void ToChatMessage_IMessageUserToolResult_ReturnsToolMessage()
+    {
+        IMessage message = new UserMessage
+        {
+            Id = "tool-result-1",
+            Content = new List<IContentBlock>
+            {
+                new ToolResultBlock
+                {
+                    ToolUseId = "tool-1",
+                    Content = "boom",
+                    ToolUseResult = new Dictionary<string, object> { ["detail"] = "boom" },
+                    IsError = true,
+                },
+            },
+        };
+
+        var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
+
+        Assert.Equal(ChatRole.Tool, chatMessage.Role);
+        Assert.Equal("tool-1", Assert.IsType<FunctionResultContent>(chatMessage.Contents[0]).CallId);
+        Assert.Equal("boom", Assert.IsType<ErrorContent>(chatMessage.Contents[1]).Message);
+    }
+
+    [Fact]
+    public void ToAgentRunResponseUpdate_UserMixedContent_RemainsUserMessage()
+    {
+        IMessage message = new UserMessage
+        {
+            Id = "mixed-user-1",
+            Content = new List<IContentBlock>
+            {
+                new TextBlock { Text = "context" },
+                new ToolResultBlock
+                {
+                    ToolUseId = "tool-1",
+                    ToolUseResult = new Dictionary<string, object> { ["detail"] = "done" },
+                },
+            },
+        };
+
+        var update = message.ToAgentRunResponseUpdate();
+
+        Assert.NotNull(update);
+        Assert.Equal(ChatRole.User, update.Role);
+    }
+
+    [Fact]
     public void ToChatMessage_IMessageResult_ReturnsFatalErrorAndUsage()
     {
         IMessage message = CreateResultMessage("quota exceeded", new Usage
