@@ -118,15 +118,12 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
 
 
-        // Convert messages to Claude format and send (exclude System messages)
-        var content = CombinedMessages(
-            messages.Where(m => m.Role == ChatRole.User)
-        );
+        var content = ClaudeMafPromptBuilder.Create(messages, "default");
 
         // Receive and collect all responses
         var responseMessages = new List<ChatMessage>();
         UsageDetails? usageDetails = null;
-        if (!string.IsNullOrWhiteSpace(content))
+        if (content is not null)
         {
             var (asyncEnumMsgs, client) = await SendUserInput(null, content, cancellationToken);
 
@@ -179,11 +176,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
            IEnumerable<ChatMessage> userAndChatHistoryMessages)
            = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
 
-        var content = CombinedMessages(
-                messages.Where(m => m.Role == ChatRole.User)
-            );
+        var content = ClaudeMafPromptBuilder.Create(
+            messages,
+            claudeThread?.SessionId.ToString() ?? "default");
 
-        if (!string.IsNullOrWhiteSpace(content))
+        if (content is not null)
         {
             var (asyncEnumMsgs, client) = await SendUserInput(claudeThread, content, cancellationToken);
 
@@ -274,15 +271,9 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         await client.InterruptAsync(CancellationToken.None);
     }
 
-    private string? CombinedMessages(IEnumerable<ChatMessage> userMessages)
-    {
-        // Convert messages to Claude format and send (exclude System messages)
-        return userMessages.FirstOrDefault()?.Text ?? "";
-    }
-
     private async Task<(IAsyncEnumerable<IMessage> Messages, ClaudeSdkClient? Client)> SendUserInput(
         ClaudeCodeAgentSession? claudeThread,
-        string content,
+        object content,
         CancellationToken cancellationToken)
     {
         IAsyncEnumerable<IMessage> asyncEnumMsgs;
