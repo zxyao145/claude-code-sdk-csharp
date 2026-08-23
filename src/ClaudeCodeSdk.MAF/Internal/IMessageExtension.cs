@@ -142,7 +142,7 @@ internal static partial class IMessageExtension
             {
                 aiContents.Add(new FunctionResultContent(
                     toolResultBlock.ToolUseId,
-                    toolResultBlock.ToolUseResult));
+                    toolResultBlock.ToolUseResult ?? toolResultBlock.Content));
 
                 if (toolResultBlock.IsError == true)
                 {

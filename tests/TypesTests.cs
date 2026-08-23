@@ -51,13 +51,13 @@ public class TypesTests
         {
             ToolUseId = "tool1",
             Content = "Result content",
-            ToolUseResult = new(),
             IsError = false
         };
 
         Assert.Equal("tool_result", block.Type);
         Assert.Equal("tool1", block.ToolUseId);
         Assert.Equal("Result content", block.Content);
+        Assert.Null(block.ToolUseResult);
         Assert.False(block.IsError);
     }
 

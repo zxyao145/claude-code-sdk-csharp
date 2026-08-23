@@ -255,7 +255,7 @@ internal static class MessageParser
             {
                 ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
                 Content = GetOptionalObject(blockElement, "content"),
-                ToolUseResult = GetOptionalDictionary(msgData, "tool_use_result") ?? new Dictionary<string, object>(),
+                ToolUseResult = GetOptionalObject(msgData, "tool_use_result"),
                 IsError = isError
             };
         }
@@ -349,22 +349,6 @@ internal static class MessageParser
             return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
         }
         throw new MessageParseException($"Missing required property: {propertyName}", element);
-    }
-
-    private static Dictionary<string, object>? GetOptionalDictionary(JsonElement element, string propertyName)
-    {
-        if (element.TryGetProperty(propertyName, out var prop))
-        {
-            if (prop.ValueKind == JsonValueKind.String)
-            {
-                return new Dictionary<string, object>()
-                {
-                    { "content" , prop.GetRawText()},
-                };
-            }
-            return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
-        }
-        return null;
     }
 
     private static T? GetOptional<T>(JsonElement element, string propertyName)

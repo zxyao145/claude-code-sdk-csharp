@@ -15,8 +15,11 @@ public record ToolResultBlock : IContentBlock
     [JsonPropertyName("content")]
     public object? Content { get; init; }
 
+    /// <summary>
+    /// Gets the optional message-level tool result metadata in its original JSON shape.
+    /// </summary>
     [JsonPropertyName("tool_use_result")]
-    public required Dictionary<string, object> ToolUseResult { get; init; }
+    public object? ToolUseResult { get; init; }
 
     [JsonPropertyName("is_error")]
     public bool? IsError { get; init; }
