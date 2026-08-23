@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using ClaudeCodeSdk.MAF;
 using ClaudeCodeSdk.Types;
 
@@ -124,6 +126,73 @@ public class MafErrorContentTests
 
         var toolResult = Assert.IsType<ToolResultBlock>(Assert.Single(message.Content));
         Assert.Null(toolResult.IsError);
+    }
+
+    [Fact]
+    public void ParseMessage_UserToolResultArray_PreservesArbitraryJsonForMaf()
+    {
+        const string json = """
+            {
+              "type": "user",
+              "uuid": "user-1",
+              "message": {
+                "content": [
+                  {
+                    "type": "tool_result",
+                    "tool_use_id": "mcp-tool-1",
+                    "content": [
+                      { "type": "text", "text": "exploration result" }
+                    ]
+                  }
+                ]
+              },
+              "tool_use_result": [
+                { "type": "text", "text": "exploration result" }
+              ]
+            }
+            """;
+
+        var message = Assert.IsType<UserMessage>(MessageParser.ParseMessage(json));
+
+        var contentBlocks = Assert.IsType<List<IContentBlock>>(message.Content);
+        var toolResult = Assert.IsType<ToolResultBlock>(Assert.Single(contentBlocks));
+        var parsedResult = Assert.IsType<JsonElement>(toolResult.ToolUseResult);
+        Assert.Equal(JsonValueKind.Array, parsedResult.ValueKind);
+        Assert.Equal("exploration result", parsedResult[0].GetProperty("text").GetString());
+
+        var update = message.ToAgentRunResponseUpdate();
+        Assert.NotNull(update);
+        Assert.Equal(ChatRole.Tool, update.Role);
+        var functionResult = Assert.IsType<FunctionResultContent>(Assert.Single(update.Contents));
+        var mafResult = Assert.IsType<JsonElement>(functionResult.Result);
+        Assert.Equal("exploration result", mafResult[0].GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public void ParseMessage_ToolResultWithoutMetadata_UsesBlockContentForMaf()
+    {
+        const string json = """
+            {
+              "type": "user",
+              "uuid": "user-1",
+              "message": {
+                "content": [
+                  {
+                    "type": "tool_result",
+                    "tool_use_id": "tool-1",
+                    "content": "fallback result"
+                  }
+                ]
+              }
+            }
+            """;
+
+        var message = Assert.IsType<UserMessage>(MessageParser.ParseMessage(json));
+        var update = message.ToAgentRunResponseUpdate();
+
+        Assert.NotNull(update);
+        var functionResult = Assert.IsType<FunctionResultContent>(Assert.Single(update.Contents));
+        Assert.Equal("fallback result", functionResult.Result);
     }
 
     [Fact]
