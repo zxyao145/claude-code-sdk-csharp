@@ -1,9 +1,9 @@
-using ClaudeCodeSdk.Utils;
-using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using ClaudeCodeSdk.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace ClaudeCodeSdk;
 
@@ -36,7 +36,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     /// <summary>
     /// Start Claude CLI process and send initial prompt.
     /// </summary>
-    public async Task StartAsync(object? prompt = null, CancellationToken cancellationToken = default)
+    public async Task StartAsync(
+        object? prompt = null,
+        CancellationToken cancellationToken = default
+    )
     {
         if (_process != null)
             throw new CLIConnectionException("Already connected");
@@ -74,7 +77,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     /// <summary>
     /// Send messages to Claude.
     /// </summary>
-    public async Task SendAsync(IEnumerable<Dictionary<string, object>> messages, CancellationToken cancellationToken = default)
+    public async Task SendAsync(
+        IEnumerable<Dictionary<string, object>> messages,
+        CancellationToken cancellationToken = default
+    )
     {
         foreach (var message in messages)
         {
@@ -88,7 +94,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     /// Receive messages from Claude as JSON dictionaries.
     /// Automatically terminates when receiving "result" type message.
     /// </summary>
-    public async IAsyncEnumerable<IMessage> ReceiveAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IMessage> ReceiveAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         if (_stdout == null)
             throw new CLIConnectionException("Not connected");
@@ -139,13 +147,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             }
             else
             {
-
                 _logger?.LogError("Error output from process stderr: {error}", error);
                 var exitCode = _process?.ExitCode ?? -1;
                 await CleanupProcessAsync();
-                if (error.Contains($"Error: Session ID")
-                    &&
-                    error.Contains($"is already in use."))
+                if (error.Contains($"Error: Session ID") && error.Contains($"is already in use."))
                 {
                     throw new SessionIdDuplicateException(_options.SessionId?.ToString());
                 }
@@ -181,33 +186,33 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         switch (prompt)
         {
             case string stringPrompt:
+            {
+                var message = new Dictionary<string, object>
                 {
-                    var message = new Dictionary<string, object>
+                    ["type"] = "user",
+                    ["message"] = new Dictionary<string, object>
                     {
-                        ["type"] = "user",
-                        ["message"] = new Dictionary<string, object>
-                        {
-                            ["role"] = "user",
-                            ["content"] = stringPrompt
-                        },
-                        ["parent_tool_use_id"] = null!,
-                        ["session_id"] = "default"
-                    };
+                        ["role"] = "user",
+                        ["content"] = stringPrompt,
+                    },
+                    ["parent_tool_use_id"] = null!,
+                    ["session_id"] = "default",
+                };
 
-                    var json = JsonUtil.Serialize(message);
-                    await WriteLineAsync(json, cancellationToken);
-                    break;
-                }
+                var json = JsonUtil.Serialize(message);
+                await WriteLineAsync(json, cancellationToken);
+                break;
+            }
 
             case IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable:
+            {
+                await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
                 {
-                    await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
-                    {
-                        var json = JsonUtil.Serialize(message);
-                        await WriteLineAsync(json, cancellationToken);
-                    }
-                    break;
+                    var json = JsonUtil.Serialize(message);
+                    await WriteLineAsync(json, cancellationToken);
                 }
+                break;
+            }
         }
     }
 
@@ -242,9 +247,8 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
+            StandardErrorEncoding = Encoding.UTF8,
         };
-
 
         // Then apply custom environment variables from options (overrides system vars)
         if (_options.EnvironmentVariables != null)
@@ -304,18 +308,20 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         if (Which("node") == null)
         {
             throw new CLINotFoundException(
-                "Claude Code requires Node.js, which is not installed.\n\n" +
-                "Install Node.js from: https://nodejs.org/\n\n" +
-                "After installing Node.js, install Claude Code:\n" +
-                "  npm install -g @anthropic-ai/claude-code");
+                "Claude Code requires Node.js, which is not installed.\n\n"
+                    + "Install Node.js from: https://nodejs.org/\n\n"
+                    + "After installing Node.js, install Claude Code:\n"
+                    + "  npm install -g @anthropic-ai/claude-code"
+            );
         }
 
         // CLI not found
         throw new CLINotFoundException(
-            "Claude Code not found. Install with:\n" +
-            "  npm install -g @anthropic-ai/claude-code\n\n" +
-            "If already installed locally, try:\n" +
-            "  export PATH=\"$HOME/node_modules/.bin:$PATH\"");
+            "Claude Code not found. Install with:\n"
+                + "  npm install -g @anthropic-ai/claude-code\n\n"
+                + "If already installed locally, try:\n"
+                + "  export PATH=\"$HOME/node_modules/.bin:$PATH\""
+        );
     }
 
     private static string? Which(string command)
@@ -358,7 +364,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             {
                 await TerminateProcessAsync(_process);
             }
-            catch { /* Ignore cleanup errors */ }
+            catch
+            { /* Ignore cleanup errors */
+            }
             finally
             {
                 _process.Dispose();

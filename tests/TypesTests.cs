@@ -19,7 +19,7 @@ public class TypesTests
         var block = new ThinkingBlock
         {
             Thinking = "I need to think about this",
-            Signature = "sig123"
+            Signature = "sig123",
         };
 
         Assert.Equal("thinking", block.Type);
@@ -35,7 +35,7 @@ public class TypesTests
         {
             Id = "tool1",
             Name = "TestTool",
-            Input = input
+            Input = input,
         };
 
         Assert.Equal("tool_use", block.Type);
@@ -51,7 +51,7 @@ public class TypesTests
         {
             ToolUseId = "tool1",
             Content = "Result content",
-            IsError = false
+            IsError = false,
         };
 
         Assert.Equal("tool_result", block.Type);
@@ -72,16 +72,13 @@ public class TypesTests
     [Fact]
     public void AssistantMessage_ShouldHaveCorrectType()
     {
-        var content = new List<IContentBlock>
-        {
-            new TextBlock { Text = "Hello" }
-        };
+        var content = new List<IContentBlock> { new TextBlock { Text = "Hello" } };
 
         var message = new AssistantMessage
         {
             Content = content,
             Model = "claude-3",
-            SessionId = "123"
+            SessionId = "123",
         };
 
         Assert.Equal("assistant", message.Type.Value);
@@ -98,7 +95,7 @@ public class TypesTests
         {
             Subtype = "test",
             Data = data,
-            SessionId = "123"
+            SessionId = "123",
         };
 
         Assert.Equal("system", message.Type.Value);
@@ -118,7 +115,7 @@ public class TypesTests
             IsError = false,
             NumTurns = 1,
             SessionId = "session123",
-            TotalCostUsd = 0.001
+            TotalCostUsd = 0.001,
         };
 
         Assert.Equal("result", message.Type.Value);

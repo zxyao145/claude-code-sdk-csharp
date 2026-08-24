@@ -1,11 +1,11 @@
-﻿using ClaudeCodeSdk.MAF.Utils;
+﻿using System.Runtime.CompilerServices;
+using System.Text.Json;
+using ClaudeCodeSdk.MAF.Utils;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using System.Runtime.CompilerServices;
-using System.Text.Json;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -20,22 +20,16 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     private readonly ClaudeSdkClientManager _clientManager;
     private bool _disposed;
 
-    public ClaudeCodeAIAgent() : this(new ClaudeCodeAIAgentOptions(), null)
-    {
-
-    }
+    public ClaudeCodeAIAgent()
+        : this(new ClaudeCodeAIAgentOptions(), null) { }
 
     /// <summary>
     /// ClaudeCodeOptions.Resume will not working. Please replace with AgentSession
-    /// 
     /// </summary>
     /// <param name="options"></param>
     /// <param name="logger"></param>
     public ClaudeCodeAIAgent(ClaudeCodeOptions? options = null, ILogger? logger = null)
-        : this(ClaudeCodeAIAgentOptions.From(options), logger)
-    {
-
-    }
+        : this(ClaudeCodeAIAgentOptions.From(options), logger) { }
 
     public ClaudeCodeAIAgent(ClaudeCodeAIAgentOptions? options = null, ILogger? logger = null)
     {
@@ -49,41 +43,56 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     public override string Name => "ClaudeCode";
 
-
     #region Serialize and Deserialize
 
-    protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+    protected override ValueTask<JsonElement> SerializeSessionCoreAsync(
+        AgentSession session,
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(session, nameof(session));
 
         if (session is not ClaudeCodeAgentSession typedSession)
         {
-            throw new InvalidOperationException($"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be serialized by this agent.");
+            throw new InvalidOperationException(
+                $"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be serialized by this agent."
+            );
         }
 
         var jso = jsonSerializerOptions ?? AgentSessionJsonUtil.ClaudeCodeAgentSession_OPTIONS;
-        var jsonElement = JsonSerializer
-            .SerializeToElement(typedSession, jso.GetTypeInfo(typeof(ClaudeCodeAgentSession)));
+        var jsonElement = JsonSerializer.SerializeToElement(
+            typedSession,
+            jso.GetTypeInfo(typeof(ClaudeCodeAgentSession))
+        );
 
         return new(jsonElement);
     }
 
-
-    protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+    protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(
+        JsonElement serializedState,
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        CancellationToken cancellationToken = default
+    )
     {
         if (serializedState.ValueKind != JsonValueKind.Object)
         {
-            throw new ArgumentException("The serialized session state must be a JSON object.", nameof(serializedState));
+            throw new ArgumentException(
+                "The serialized session state must be a JSON object.",
+                nameof(serializedState)
+            );
         }
         var jso = jsonSerializerOptions ?? AgentSessionJsonUtil.ClaudeCodeAgentSession_OPTIONS;
 
-
-        var deserializeSession = serializedState
-            .Deserialize(jso.GetTypeInfo(typeof(ClaudeCodeAgentSession)))
+        var deserializeSession =
+            serializedState.Deserialize(jso.GetTypeInfo(typeof(ClaudeCodeAgentSession)))
             as ClaudeCodeAgentSession;
         if (deserializeSession is null || deserializeSession.SessionId == Guid.Empty)
         {
-            throw new ArgumentException("The serialized session state must contain a valid non-empty sessionId.", nameof(serializedState));
+            throw new ArgumentException(
+                "The serialized session state must contain a valid non-empty sessionId.",
+                nameof(serializedState)
+            );
         }
 
         return new(deserializeSession);
@@ -91,7 +100,9 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
     #endregion
 
-    protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
+    protected override ValueTask<AgentSession> CreateSessionCoreAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         AgentSession session = NewSession();
         return ValueTask.FromResult(session);
@@ -109,51 +120,75 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         AgentSession? session = null,
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default
-        )
+    )
     {
         var claudeThread = session as ClaudeCodeAgentSession;
+        var requestMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        var safeSession = await PrepareSessionAsync(
+            claudeThread,
+            requestMessages,
+            cancellationToken
+        );
 
-        (ClaudeCodeAgentSession safeSession,
-            IEnumerable<ChatMessage> userAndChatHistoryMessages)
-            = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
-
-
-        var content = ClaudeMafPromptBuilder.Create(messages, "default");
-
-        // Receive and collect all responses
-        var responseMessages = new List<ChatMessage>();
-        UsageDetails? usageDetails = null;
+        var content = ClaudeMafPromptBuilder.Create(requestMessages, "default");
+        IAsyncEnumerable<IMessage> responseStream;
+        ClaudeSdkClient? client = null;
         if (content is not null)
         {
-            var (asyncEnumMsgs, client) = await SendUserInput(null, content, cancellationToken);
-            using var cancellationRegistration = RegisterInterrupt(client, cancellationToken);
+            (responseStream, client) = await SendUserInput(null, content, cancellationToken);
+        }
+        else
+        {
+            responseStream = EmptyMessagesAsync();
+        }
 
-            await foreach (var claudeMessage in asyncEnumMsgs.WithCancellation(cancellationToken))
+        using var cancellationRegistration = RegisterInterrupt(client, cancellationToken);
+        return await ProcessNonStreamingMessagesAsync(
+                responseStream,
+                safeSession,
+                requestMessages,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    internal async Task<AgentResponse> ProcessNonStreamingMessagesAsync(
+        IAsyncEnumerable<IMessage> messages,
+        ClaudeCodeAgentSession session,
+        IReadOnlyList<ChatMessage> requestMessages,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var responseMessages = new List<ChatMessage>();
+        UsageDetails? usageDetails = null;
+        await foreach (
+            var processedMessage in ProcessMessagesWithHistoryAsync(
+                messages,
+                session,
+                requestMessages,
+                includeMappedUpdates: false,
+                cancellationToken: cancellationToken
+            )
+        )
+        {
+            if (processedMessage.Message is ResultMessage resultMessage)
             {
-                if (claudeMessage is ResultMessage resultMessage)
-                {
-                    usageDetails = resultMessage.ToUsageDetails();
-                }
+                usageDetails = resultMessage.ToUsageDetails();
+            }
 
-                var responseMessage = claudeMessage.ToChatMessage();
-                if (responseMessage != null)
-                {
-                    responseMessages.Add(responseMessage);
-                }
+            if (processedMessage.Message.ToChatMessage() is { } responseMessage)
+            {
+                responseMessages.Add(responseMessage);
             }
         }
 
-        await SaveNewMessagesAsync(safeSession, userAndChatHistoryMessages, responseMessages, cancellationToken);
-
-        // Return complete response
         return new AgentResponse
         {
             Usage = usageDetails,
             Messages = responseMessages,
-            ResponseId = Guid.NewGuid().ToString()
+            ResponseId = Guid.NewGuid().ToString(),
         };
     }
-
 
     #endregion
 
@@ -163,91 +198,174 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
         AgentRunOptions? options = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         var claudeThread = session as ClaudeCodeAgentSession;
-
-        (ClaudeCodeAgentSession safeSession,
-           IEnumerable<ChatMessage> userAndChatHistoryMessages)
-           = await PrepareSessionAndMessagesAsync(claudeThread, messages, cancellationToken);
+        var requestMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        var safeSession = await PrepareSessionAsync(
+            claudeThread,
+            requestMessages,
+            cancellationToken
+        );
 
         var content = ClaudeMafPromptBuilder.Create(
-            messages,
-            claudeThread?.SessionId.ToString() ?? "default");
+            requestMessages,
+            claudeThread?.SessionId.ToString() ?? "default"
+        );
 
         if (content is not null)
         {
-            var (asyncEnumMsgs, client) = await SendUserInput(claudeThread, content, cancellationToken);
+            var (asyncEnumMsgs, client) = await SendUserInput(
+                claudeThread,
+                content,
+                cancellationToken
+            );
             using var cancellationRegistration = RegisterInterrupt(client, cancellationToken);
-
-            if (ChatHistoryProvider is null)
+            await foreach (
+                var update in ProcessStreamingMessagesAsync(
+                    asyncEnumMsgs,
+                    safeSession,
+                    requestMessages,
+                    cancellationToken
+                )
+            )
             {
-                await foreach (var claudeMessage in asyncEnumMsgs.WithCancellation(cancellationToken))
-                {
-                    var update = claudeMessage.ToAgentRunResponseUpdate();
-                    if (update != null)
-                    {
-                        yield return update;
-                    }
-                }
-            }
-            else
-            {
-                List<ChatMessage> responseMessages = new();
-                // Receive and yield responses
-                await foreach (var claudeMessage in asyncEnumMsgs.WithCancellation(cancellationToken))
-                {
-                    var update = claudeMessage.ToAgentRunResponseUpdate();
-                    if (update != null)
-                    {
-                        var chatMessage = update.ToChatMessage();
-                        responseMessages.Add(chatMessage);
-                        yield return update;
-                    }
-                }
-
-                await SaveNewMessagesAsync(safeSession, userAndChatHistoryMessages, responseMessages, cancellationToken);
+                yield return update;
             }
         }
     }
 
+    internal async IAsyncEnumerable<AgentResponseUpdate> ProcessStreamingMessagesAsync(
+        IAsyncEnumerable<IMessage> messages,
+        ClaudeCodeAgentSession session,
+        IReadOnlyList<ChatMessage> requestMessages,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await foreach (
+            var processedMessage in ProcessMessagesWithHistoryAsync(
+                messages,
+                session,
+                requestMessages,
+                includeMappedUpdates: true,
+                cancellationToken: cancellationToken
+            )
+        )
+        {
+            foreach (var update in processedMessage.Updates)
+            {
+                yield return update;
+            }
+        }
+    }
+
+    private async IAsyncEnumerable<MessageWithUpdates> ProcessMessagesWithHistoryAsync(
+        IAsyncEnumerable<IMessage> messages,
+        ClaudeCodeAgentSession session,
+        IReadOnlyList<ChatMessage> requestMessages,
+        bool includeMappedUpdates,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        var enableHistoryPersistence = ChatHistoryProvider != null;
+        var processor = new ClaudeStreamingMessageProcessor(
+            requestMessages,
+            enableHistoryPersistence,
+            enableMessageMapping: includeMappedUpdates
+        );
+
+        await foreach (var message in messages.WithCancellation(cancellationToken))
+        {
+            var mappedMessage = processor.Process(message);
+            yield return new MessageWithUpdates(
+                message,
+                includeMappedUpdates ? mappedMessage.Updates : []
+            );
+
+            if (mappedMessage.CompletedHistoryBatch is { } completedBatch)
+            {
+                await PersistStreamingBatchAsync(session, completedBatch, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        if (processor.CompleteRun() is { } finalBatch)
+        {
+            await PersistStreamingBatchAsync(session, finalBatch, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private ValueTask PersistStreamingBatchAsync(
+        ClaudeCodeAgentSession session,
+        ClaudeHistoryBatch batch,
+        CancellationToken cancellationToken
+    )
+    {
+        IEnumerable<ChatMessage> responseMessages =
+            batch.ResponseUpdates.Count == 0
+                ? []
+                : batch.ResponseUpdates.ToAgentResponse().Messages;
+        return SaveNewMessagesAsync(
+            session,
+            batch.RequestMessages,
+            responseMessages,
+            cancellationToken
+        );
+    }
 
     #endregion
 
 
     #region ChatHistoryProvider
 
-    private async ValueTask<(ClaudeCodeAgentSession AgentSession, IEnumerable<ChatMessage> HistoryMessages)> PrepareSessionAndMessagesAsync(
+    private async ValueTask<ClaudeCodeAgentSession> PrepareSessionAsync(
         AgentSession? session,
         IEnumerable<ChatMessage> inputMessages,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        IEnumerable<ChatMessage> userAndChatHistoryMessages = inputMessages;
         if (ChatHistoryProvider is not null)
         {
 #pragma warning disable MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-            var invokingContext = new ChatHistoryProvider.InvokingContext(this, session, inputMessages);
+            var invokingContext = new ChatHistoryProvider.InvokingContext(
+                this,
+                session,
+                inputMessages
+            );
 #pragma warning restore MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-            userAndChatHistoryMessages = await this.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
+            // Claude Code resumes provider-managed conversations by session ID, so stored history is not resent as prompt input.
+            _ = await this
+                .ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken)
+                .ConfigureAwait(false);
         }
         session ??= await this.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
         if (session is not ClaudeCodeAgentSession typedSession)
         {
-            throw new InvalidOperationException($"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be used by this agent.");
+            throw new InvalidOperationException(
+                $"The provided session type '{session.GetType().Name}' is not compatible with this agent. Only sessions of type '{nameof(ChatClientAgentSession)}' can be used by this agent."
+            );
         }
-        return (typedSession, userAndChatHistoryMessages);
+        return typedSession;
     }
 
     private async ValueTask SaveNewMessagesAsync(
         ClaudeCodeAgentSession session,
         IEnumerable<ChatMessage> requestMessages,
         IEnumerable<ChatMessage> responseMessages,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (ChatHistoryProvider is not null)
         {
 #pragma warning disable MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, responseMessages);
+            var invokedContext = new ChatHistoryProvider.InvokedContext(
+                this,
+                session,
+                requestMessages,
+                responseMessages
+            );
 #pragma warning restore MAAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             await ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
         }
@@ -261,10 +379,19 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         await client.InterruptAsync(CancellationToken.None);
     }
 
-    private async Task<(IAsyncEnumerable<IMessage> Messages, ClaudeSdkClient? Client)> SendUserInput(
+    private static async IAsyncEnumerable<IMessage> EmptyMessagesAsync()
+    {
+        yield break;
+    }
+
+    private async Task<(
+        IAsyncEnumerable<IMessage> Messages,
+        ClaudeSdkClient? Client
+    )> SendUserInput(
         ClaudeCodeAgentSession? claudeThread,
         object content,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         IAsyncEnumerable<IMessage> asyncEnumMsgs;
         ClaudeSdkClient? client = null;
@@ -281,9 +408,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         {
             client = await _clientManager.GetClientAsync(claudeThread, cancellationToken);
 
-            await client.QueryAsync(content,
-                 sessionId: claudeThread.SessionId.ToString(),
-                 cancellationToken: cancellationToken);
+            await client.QueryAsync(
+                content,
+                sessionId: claudeThread.SessionId.ToString(),
+                cancellationToken: cancellationToken
+            );
 
             asyncEnumMsgs = client.ReceiveResponseAsync(cancellationToken);
         }
@@ -314,12 +443,19 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogDebug(ex, "Failed to interrupt Claude SDK client during cancellation");
+                    _logger?.LogDebug(
+                        ex,
+                        "Failed to interrupt Claude SDK client during cancellation"
+                    );
                 }
             });
         });
     }
 
+    private readonly record struct MessageWithUpdates(
+        IMessage Message,
+        IReadOnlyList<AgentResponseUpdate> Updates
+    );
 
     #region IDisposable / IAsyncDisposable
 
@@ -329,7 +465,8 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
         _clientManager.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _disposed = true;
@@ -341,7 +478,8 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
         await _clientManager.DisposeAsync();
         _disposed = true;

@@ -6,7 +6,6 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ClaudeCodeSdk.Utils;
 
-
 internal static class JsonUtil
 {
     internal static readonly JsonSerializerOptions CAMELCASE_OPTIONS;
@@ -21,7 +20,6 @@ internal static class JsonUtil
             WriteIndented = false,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
-
 
         SNAKECASELOWER_OPTIONS = new()
         {
@@ -46,7 +44,6 @@ internal static class JsonUtil
     {
         return JsonSerializer.Deserialize<T>(value, CAMELCASE_OPTIONS);
     }
-
 
     public static JsonElement SnakeCaseSerializeToElement<TValue>(TValue value)
     {

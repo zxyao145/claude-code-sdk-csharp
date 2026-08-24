@@ -26,6 +26,12 @@ dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
 dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release
 ```
 
+### Formatting
+```bash
+# Format all code with CSharpier
+dotnet csharpier format .
+```
+
 ### Prerequisites for Development
 - .NET 10.0 SDK (supports .NET 8.0+ for compatibility)
 - Node.js (required for Claude Code CLI)

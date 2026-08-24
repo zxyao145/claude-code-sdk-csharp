@@ -1,5 +1,4 @@
 using ClaudeCodeSdk.MAF;
-
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;

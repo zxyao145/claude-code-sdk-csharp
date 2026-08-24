@@ -1,5 +1,5 @@
-using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 
 namespace ClaudeCodeSdk;
 
@@ -25,7 +25,8 @@ public static class ClaudeQuery
         object prompt,
         ClaudeCodeOptions? options = null,
         ILogger? logger = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         options ??= new ClaudeCodeOptions();
 

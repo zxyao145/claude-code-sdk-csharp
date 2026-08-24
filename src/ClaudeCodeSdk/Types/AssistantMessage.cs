@@ -19,4 +19,12 @@ public record AssistantMessage : IMessage
 
     [JsonPropertyName("session_id")]
     public required string SessionId { get; init; }
+
+    /// <summary>
+    /// Gets the provider message ID from the nested Claude API message.
+    /// </summary>
+    public string? ApiMessageId { get; init; }
+
+    [JsonPropertyName("parent_tool_use_id")]
+    public string? ParentToolUseId { get; init; }
 }

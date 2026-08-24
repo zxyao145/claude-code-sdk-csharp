@@ -1,53 +1,124 @@
-# Changelog
+## [10.3.2] - 2026-08-07
 
-All notable changes to the Claude Code SDK for .NET will be documented in this file.
+### 🚀 Features
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+- *(maf)* Add name metadata to claude code agent
 
-## [0.0.20] - 2024-12-23
+## [10.3.1] - 2026-07-27
 
-### Added
-- Initial release of Claude Code SDK for .NET
-- Core SDK functionality translated from Python version
-- `ClaudeQuery.QueryAsync()` for one-shot queries
-- `ClaudeSDKClient` for interactive, bidirectional conversations
-- Full type system with strongly-typed messages and content blocks
-- Subprocess CLI transport implementation
-- Comprehensive error handling with custom exception types
-- Message parsing with JSON support
-- Support for all Claude Code options and tools
-- Examples demonstrating basic usage, streaming, and interactive scenarios
-- Unit tests for core functionality
-- Complete documentation and README
+### ⚙️ Miscellaneous Tasks
 
-### Features
-- **Bidirectional Communication**: Full support for interactive conversations
-- **Tool Integration**: Complete tool system with permission modes
-- **Streaming Support**: Real-time message streaming
-- **Type Safety**: Strongly-typed messages and content blocks
-- **Error Handling**: Comprehensive exception system
-- **Async/Await**: Full async support throughout the API
-- **Cross-Platform**: Compatible with all .NET 8.0+ platforms
-- **Cancellation Support**: CancellationToken support for all async operations
+- Upgrade nuget package
 
-### Supported Message Types
-- `UserMessage` - User input messages
-- `AssistantMessage` - Claude's responses with content blocks
-- `SystemMessage` - System-level messages
-- `ResultMessage` - Conversation results with cost and usage info
+## [10.3.0] - 2026-07-16
 
-### Supported Content Blocks
-- `TextBlock` - Plain text content
-- `ThinkingBlock` - Claude's reasoning process
-- `ToolUseBlock` - Tool execution requests
-- `ToolResultBlock` - Tool execution results
+### 🚀 Features
 
-### Configuration Options
-- System prompts and prompt appending
-- Tool allowlists and denylists
-- Permission modes (default, acceptEdits, plan, bypassPermissions)
-- Working directory and additional directories
-- MCP server configurations
-- Model selection and thinking token limits
-- Session management and conversation continuation
+- *(maf)* Surface error content from results, retries, and tools
+
+### 🐛 Bug Fixes
+
+- *(maf)* Align RunCoreAsync content source with streaming variant
+
+### ⚙️ Miscellaneous Tasks
+
+- Update ci
+
+## [10.2.0] - 2026-07-01
+
+### 🚜 Refactor
+
+- Upgrade Microsoft.Agents.AI to 1.12.0
+
+## [10.1.0] - 2026-05-02
+
+### 🚜 Refactor
+
+- Update package versions for AI, test SDK, and coverlet
+- Add logging, improve error handling, and enrich messages
+
+## [10.0.0] - 2026-04-04
+
+### 🚜 Refactor
+
+- Upgrate Microsoft.Agents.AI to release, and keep the version consistent with .net
+
+## [0.10.4] - 2026-03-18
+
+### 🚀 Features
+
+- Add chat history provider for ClaudeCodeAIAgent (#15)
+
+### 🐛 Bug Fixes
+
+- Some error
+- Drain pending stream output after interrupt in ClaudeCodeSdk (#11)
+- Ci
+- Ci
+- Claude code continuing the session cannot simply specify the session ID (#14)
+- Error proxy message to claude
+
+### 🚜 Refactor
+
+- Add ConnectStatus tracking and improve error handling (#10)
+- Upgrade MAF to 1.0.0-rc1
+
+### 📚 Documentation
+
+- Update README for clarity and versioning details
+- Update README.md
+
+### ⚙️ Miscellaneous Tasks
+
+- Code clean
+- Remove unused package in Microsoft.Extensions.AI in ClaudeCodeSdk.MAF
+
+## [0.10.1] - 2026-01-31
+
+### 🚀 Features
+
+- Upgrade the ClaudeCodeSdk version and optimize dependencies and project structure
+- Add ClaudeSdkClientManager for improved session lifecycle management
+
+### 🐛 Bug Fixes
+
+- Some bugs
+- ClaudeCodeAIAgent
+- SessionId not null when first query
+- ANTHROPIC_AUTH_TOKEN environment variables not work
+- Tool use result
+- MessageParser bug
+
+### 💼 Other
+
+- Upgrade version
+
+### 🚜 Refactor
+
+- ManagePackageVersionsCentrally
+- Simplify architecture by unifying core process layer (checkpoint)
+- Change tpye to strong type MessageType
+- The AIAgent configuration and message processing to enhance error support
+- Enhance tool result handling and add cost tracking
+- Disable GeneratePackageOnBuild
+- Upgrade to MAF 1.0.0-preview.260121.1 (breaking change)
+
+### 📚 Documentation
+
+- Regenerate ClaudeCodeSdk.MAF README with comprehensive documentation
+- Add comprehensive README for ClaudeCodeSdk package
+- Enhance README with comprehensive documentation
+- Enhance ClaudeCodeSdk README with comprehensive documentation
+
+### ⚡ Performance
+
+- Optimize ClaudeProcess for better performance and clarity
+
+### ⚙️ Miscellaneous Tasks
+
+- Add log
+- Dotnet fotmat
+- Checkpoint - bug fixes and type system enhancement
+- Update publish.yml
+- Add environment configuration to publish job
+

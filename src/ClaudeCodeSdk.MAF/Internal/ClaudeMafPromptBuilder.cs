@@ -12,8 +12,9 @@ internal static class ClaudeMafPromptBuilder
             return null;
         }
 
-        var hasImage = message.Contents.Any(
-            static content => content is DataContent data && data.HasTopLevelMediaType("image"));
+        var hasImage = message.Contents.Any(static content =>
+            content is DataContent data && data.HasTopLevelMediaType("image")
+        );
         if (!hasImage)
         {
             return string.IsNullOrWhiteSpace(message.Text) ? null : message.Text;
@@ -33,18 +34,16 @@ internal static class ClaudeMafPromptBuilder
                             {
                                 ["type"] = "base64",
                                 ["media_type"] = data.MediaType,
-                                ["data"] = Convert.ToBase64String(data.Data.Span)
-                            }
-                        });
+                                ["data"] = Convert.ToBase64String(data.Data.Span),
+                            },
+                        }
+                    );
                     break;
 
                 case TextContent text when !string.IsNullOrWhiteSpace(text.Text):
                     blocks.Add(
-                        new Dictionary<string, object>
-                        {
-                            ["type"] = "text",
-                            ["text"] = text.Text
-                        });
+                        new Dictionary<string, object> { ["type"] = "text", ["text"] = text.Text }
+                    );
                     break;
             }
         }
@@ -56,15 +55,17 @@ internal static class ClaudeMafPromptBuilder
                 ["message"] = new Dictionary<string, object>
                 {
                     ["role"] = "user",
-                    ["content"] = blocks
+                    ["content"] = blocks,
                 },
                 ["parent_tool_use_id"] = null!,
-                ["session_id"] = sessionId
-            });
+                ["session_id"] = sessionId,
+            }
+        );
     }
 
     private static async IAsyncEnumerable<Dictionary<string, object>> CreateMessageStream(
-        Dictionary<string, object> message)
+        Dictionary<string, object> message
+    )
     {
         await Task.CompletedTask;
         yield return message;

@@ -1,7 +1,7 @@
-using ClaudeCodeSdk.Types;
-using Microsoft.Agents.AI;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
+using ClaudeCodeSdk.Types;
+using Microsoft.Agents.AI;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -30,9 +30,9 @@ public sealed class ClaudeCodeAgentSession : AgentSession
         SessionId = sessionId ?? Guid.NewGuid();
     }
 
-
     [JsonConstructor]
-    internal ClaudeCodeAgentSession(Guid sessionId, AgentSessionStateBag? stateBag) : base(stateBag ?? new())
+    internal ClaudeCodeAgentSession(Guid sessionId, AgentSessionStateBag? stateBag)
+        : base(stateBag ?? new())
     {
         this.SessionId = sessionId;
     }

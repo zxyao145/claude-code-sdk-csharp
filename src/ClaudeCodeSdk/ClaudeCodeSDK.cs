@@ -5,7 +5,7 @@ namespace ClaudeCodeSdk;
 
 /// <summary>
 /// Claude Code SDK for .NET - Main entry point for Claude Code integration.
-/// 
+///
 /// This SDK provides two main ways to interact with Claude Code:
 /// 1. ClaudeQuery.QueryAsync() - For simple, one-shot queries
 /// 2. ClaudeSDKClient - For interactive, bidirectional conversations
@@ -27,7 +27,8 @@ public static class ClaudeCodeSDK
     public static IAsyncEnumerable<IMessage> QueryAsync(
         string prompt,
         ClaudeCodeOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         return ClaudeQuery.QueryAsync(prompt, options, cancellationToken: cancellationToken);
     }

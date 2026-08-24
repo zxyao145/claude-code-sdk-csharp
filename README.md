@@ -17,6 +17,7 @@ Package versions use the format `x.y.z` and may include a `-preview` suffix for 
 - ✅ **One-shot Queries** - Simple request/response pattern via `ClaudeQuery.QueryAsync`
 - ✅ **Interactive Client** - Bidirectional communication with `ClaudeSdkClient`
 - ✅ **Streaming Support** - Real-time response streaming via `IAsyncEnumerable<T>`
+- ✅ **Partial Messages** - Optional token-level text, thinking, and Tool Call streaming
 - ✅ **Microsoft Agent Framework Integration** - Use Claude as an `AIAgent` (ClaudeCodeSdk.MAF)
 - ✅ **Session Management** - Multi-turn conversations with session support and automatic session lifecycle management
 - ✅ **Session Persistence** - Serialize/deserialize conversation sessions for storage
@@ -136,7 +137,7 @@ See [ClaudeCodeSdk.MAF README](src/ClaudeCodeSdk.MAF/README.md) for complete MAF
 > MAF currently forwards user-message text content to Claude Code. If you need a global instruction, configure `ClaudeCodeAIAgentOptions.SystemPrompt` (or `AppendSystemPrompt`) instead of relying on per-request `ChatRole.System` messages.
 
 > [!TIP]
-> For long-running conversations backed by your own storage, configure `ClaudeCodeAIAgentOptions.ChatHistoryProvider` to load history before each request and save new messages after each response.
+> For long-running conversations backed by your own storage, configure `ClaudeCodeAIAgentOptions.ChatHistoryProvider` to observe each request and save new messages after each response. Claude Code resumes model history through its provider session ID rather than resending stored messages as prompt input.
 
 ## Architecture
 
@@ -235,6 +236,7 @@ var options = new ClaudeCodeOptions
     MaxThinkingTokens = 10000,          // Extended thinking budget
     SystemPrompt = "You are a helpful assistant",
     Model = "claude-sonnet-4",
+    IncludePartialMessages = true,       // Emit raw StreamEvent messages
     PermissionMode = PermissionMode.Auto, // Tool approval mode
     WorkingDirectory = "/path/to/project",
     MaxTurns = 10,
@@ -244,6 +246,24 @@ var options = new ClaudeCodeOptions
     }
 };
 ```
+
+### Streaming partial messages
+
+Set `IncludePartialMessages` to receive raw Claude Code `StreamEvent` messages before each complete
+`AssistantMessage`. Each event preserves the CLI's original JSON payload so callers can handle new event types without
+waiting for an SDK update.
+
+`ClaudeCodeSdk.MAF` translates supported partial events into standard `AgentResponseUpdate` chunks. Text and thinking
+deltas are emitted immediately with a stable `ResponseId` and `MessageId`; Tool Use JSON is accumulated internally and
+emitted as a complete `FunctionCallContent` when its content block ends. The later complete `AssistantMessage` is used
+only as a fallback for content that was not already streamed.
+
+When a MAF `ChatHistoryProvider` is configured together with partial messages, updates are still yielded immediately.
+Each logical Assistant message is persisted after both its `message_stop` event and complete `AssistantMessage` arrive.
+The SDK combines that message's updates with `ToAgentResponse()`, so a run containing multiple Tool Use rounds can persist
+multiple completed history batches. Tool results are carried into the next completed Assistant batch. An interrupted or
+error-ending run keeps earlier completed batches but does not persist the current incomplete partial Assistant message.
+Without partial events, the SDK retains the compatible end-of-run aggregation fallback.
 
 ### Handling tool permissions and questions
 

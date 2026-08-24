@@ -52,14 +52,14 @@ public static class QuickStartExamples
         var options = new ClaudeCodeOptions
         {
             SystemPrompt = "You are a helpful assistant that explains things simply.",
-            MaxTurns = 1
+            MaxTurns = 1,
         };
         options.EnvironmentVariables = EnvUtil.CreateEnv();
 
         Console.WriteLine("Explain what C# is in one sentence.");
-        await foreach (var message in ClaudeQuery.QueryAsync(
-            "Explain what C# is in one sentence.",
-            options))
+        await foreach (
+            var message in ClaudeQuery.QueryAsync("Explain what C# is in one sentence.", options)
+        )
         {
             if (message is AssistantMessage assistantMessage)
             {
@@ -85,14 +85,17 @@ public static class QuickStartExamples
         var options = new ClaudeCodeOptions
         {
             AllowedTools = new[] { "Read", "Write" },
-            SystemPrompt = "You are a helpful file assistant."
+            SystemPrompt = "You are a helpful file assistant.",
         };
         options.EnvironmentVariables = EnvUtil.CreateEnv();
 
         Console.WriteLine("Create a file called hello.txt with 'Hello, World!' in it");
-        await foreach (var message in ClaudeQuery.QueryAsync(
-            "Create a file called hello.txt with 'Hello, World!' in it",
-            options))
+        await foreach (
+            var message in ClaudeQuery.QueryAsync(
+                "Create a file called hello.txt with 'Hello, World!' in it",
+                options
+            )
+        )
         {
             if (message is AssistantMessage assistantMessage)
             {

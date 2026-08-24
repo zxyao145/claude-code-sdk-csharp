@@ -62,11 +62,15 @@ internal sealed class ControlProtocolHandler
     private bool StartRequest(JsonElement message, CancellationToken cancellationToken)
     {
         var requestId = GetRequiredString(message, "request_id");
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
         if (!_pendingRequests.TryAdd(requestId, requestCancellation))
         {
             requestCancellation.Dispose();
-            throw new InvalidOperationException($"Control request '{requestId}' is already pending.");
+            throw new InvalidOperationException(
+                $"Control request '{requestId}' is already pending."
+            );
         }
 
         _ = HandleRequestAsync(requestId, message, requestCancellation);
@@ -96,7 +100,9 @@ internal sealed class ControlProtocolHandler
             var subtype = GetRequiredString(request, "subtype");
             if (!string.Equals(subtype, "can_use_tool", StringComparison.Ordinal))
             {
-                throw new InvalidOperationException($"Unsupported control request subtype '{subtype}'.");
+                throw new InvalidOperationException(
+                    $"Unsupported control request subtype '{subtype}'."
+                );
             }
 
             if (_canUseTool == null)
@@ -132,7 +138,8 @@ internal sealed class ControlProtocolHandler
                 ),
             };
 
-            await WriteResponseAsync(requestId, response, requestCancellation.Token).ConfigureAwait(false);
+            await WriteResponseAsync(requestId, response, requestCancellation.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
         {
@@ -143,9 +150,11 @@ internal sealed class ControlProtocolHandler
             _logger?.LogError(exception, "Control request {RequestId} failed.", requestId);
             try
             {
-                await WriteErrorAsync(requestId, exception.Message, requestCancellation.Token).ConfigureAwait(false);
+                await WriteErrorAsync(requestId, exception.Message, requestCancellation.Token)
+                    .ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
+            { }
             catch (Exception writeException)
             {
                 _logger?.LogDebug(
@@ -181,7 +190,11 @@ internal sealed class ControlProtocolHandler
             cancellationToken
         );
 
-    private Task WriteErrorAsync(string requestId, string error, CancellationToken cancellationToken) =>
+    private Task WriteErrorAsync(
+        string requestId,
+        string error,
+        CancellationToken cancellationToken
+    ) =>
         WriteAsync(
             new Dictionary<string, object?>
             {
@@ -196,11 +209,14 @@ internal sealed class ControlProtocolHandler
             cancellationToken
         );
 
-    private Task WriteAsync(IReadOnlyDictionary<string, object?> value, CancellationToken cancellationToken) =>
-        _writeLineAsync(JsonUtil.Serialize(value), cancellationToken);
+    private Task WriteAsync(
+        IReadOnlyDictionary<string, object?> value,
+        CancellationToken cancellationToken
+    ) => _writeLineAsync(JsonUtil.Serialize(value), cancellationToken);
 
     private static string GetRequiredString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value) && !string.IsNullOrWhiteSpace(value.GetString())
+        element.TryGetProperty(propertyName, out var value)
+        && !string.IsNullOrWhiteSpace(value.GetString())
             ? value.GetString()!
             : throw new InvalidOperationException($"Control message is missing '{propertyName}'.");
 

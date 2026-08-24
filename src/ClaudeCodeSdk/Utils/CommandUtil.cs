@@ -29,10 +29,7 @@ internal class CommandUtil
         // Note that IsPathRooted(...) doesn't check if the path is absolute, as it also returns true for
         // strings like 'c:foo.txt' (which is relative to the current directory on drive C), but it's good
         // enough for our purposes and the alternative is only available on .NET Standard 2.1+.
-        if (
-            Path.IsPathRooted(fileName)
-            || !string.IsNullOrWhiteSpace(Path.GetExtension(fileName))
-        )
+        if (Path.IsPathRooted(fileName) || !string.IsNullOrWhiteSpace(Path.GetExtension(fileName)))
         {
             return fileName;
         }
@@ -71,14 +68,16 @@ internal class CommandUtil
             ).FirstOrDefault(File.Exists) ?? fileName;
     }
 
-
-
     public static List<string> BuildCommand(
         ClaudeCodeOptions options,
         bool isStreaming,
-        string prompt)
+        string prompt
+    )
     {
         var cmd = new List<string> { "--output-format", "stream-json", "--verbose" };
+
+        if (options.IncludePartialMessages)
+            cmd.Add("--include-partial-messages");
 
         if (!string.IsNullOrEmpty(options.SystemPrompt))
             cmd.AddRange(new[] { "--system-prompt", options.SystemPrompt });
@@ -170,8 +169,8 @@ internal class CommandUtil
 
         return "stdio";
     }
-
 }
+
 internal static class EnvironmentEx
 {
     private static readonly Lazy<string?> ProcessPathLazy = new(() =>

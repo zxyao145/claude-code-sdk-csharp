@@ -63,7 +63,7 @@ public static class StreamingExamples
         {
             //SystemPrompt = "You are a helpful assistant. Keep your responses concise.",
             MaxTurns = 10,
-            WorkingDirectory = "D:\\source\\repos\\claude-code-sdk-csharp"
+            WorkingDirectory = "D:\\source\\repos\\claude-code-sdk-csharp",
         };
         options.EnvironmentVariables = EnvUtil.CreateEnv();
 
@@ -118,10 +118,10 @@ public static class StreamingExamples
             ["message"] = new Dictionary<string, object>
             {
                 ["role"] = "user",
-                ["content"] = "Hello, how are you?"
+                ["content"] = "Hello, how are you?",
             },
             ["parent_tool_use_id"] = null!,
-            ["session_id"] = "streaming-example"
+            ["session_id"] = "streaming-example",
         };
 
         // Simulate some delay
@@ -133,10 +133,10 @@ public static class StreamingExamples
             ["message"] = new Dictionary<string, object>
             {
                 ["role"] = "user",
-                ["content"] = "Can you help me with a math problem?"
+                ["content"] = "Can you help me with a math problem?",
             },
             ["parent_tool_use_id"] = null!,
-            ["session_id"] = "streaming-example"
+            ["session_id"] = "streaming-example",
         };
     }
 }

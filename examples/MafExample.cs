@@ -1,7 +1,7 @@
-﻿using ClaudeCodeSdk.MAF;
+﻿using System.Text.Json;
+using ClaudeCodeSdk.MAF;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace ClaudeCodeSdk.Examples;
 
@@ -18,16 +18,15 @@ internal static class MafExample
 
     public static async Task BasicExample()
     {
-        var logger = LoggerFactory.Create(builder =>
-        {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Debug);
-        }).CreateLogger("MafExample");
-        
-        var options = new ClaudeCodeAIAgentOptions
-        {
-            EnvironmentVariables = EnvUtil.CreateEnv(),
-        };
+        var logger = LoggerFactory
+            .Create(builder =>
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Debug);
+            })
+            .CreateLogger("MafExample");
+
+        var options = new ClaudeCodeAIAgentOptions { EnvironmentVariables = EnvUtil.CreateEnv() };
 
         Console.WriteLine("maf BasicExample turn 1");
         await using var agent = new ClaudeCodeAIAgent(options);
@@ -38,26 +37,25 @@ internal static class MafExample
         }
         Console.WriteLine("maf BasicExample turn 1 end");
 
-
         Console.WriteLine("maf BasicExample turn 2");
-        response = await agent.RunAsync("Now add some emojis to the joke and tell it in the voice of a pirate's parrot.");
+        response = await agent.RunAsync(
+            "Now add some emojis to the joke and tell it in the voice of a pirate's parrot."
+        );
         foreach (var item in response.Messages)
         {
             Console.WriteLine("response message item: " + item);
         }
         Console.WriteLine("maf BasicExample turn 2 end");
 
-
         Console.WriteLine("maf BasicExample end");
     }
-
 
     public static async Task MultiTurn()
     {
         var options = new ClaudeCodeAIAgentOptions
         {
             EnvironmentVariables = EnvUtil.CreateEnv(),
-            ChatHistoryProvider = new InMemoryChatHistoryProvider()
+            ChatHistoryProvider = new InMemoryChatHistoryProvider(),
         };
 
         Console.WriteLine("maf MultiTurn turn 1");
@@ -71,15 +69,16 @@ internal static class MafExample
         }
         Console.WriteLine("maf MultiTurn turn 1 end");
 
-
         Console.WriteLine("maf MultiTurn turn 2");
-        response = await agent.RunAsync("Now add some emojis to the joke and tell it in the voice of a pirate's parrot.", session);
+        response = await agent.RunAsync(
+            "Now add some emojis to the joke and tell it in the voice of a pirate's parrot.",
+            session
+        );
         foreach (var item in response.Messages)
         {
             Console.WriteLine("response message item: " + item);
         }
         Console.WriteLine("maf MultiTurn turn 2 end");
-
 
         var msg = await agent.SerializeSessionAsync(session);
         // {"sessionId":"<Guid>","stateBag":{}}
@@ -92,7 +91,7 @@ internal static class MafExample
         var options = new ClaudeCodeAIAgentOptions
         {
             EnvironmentVariables = EnvUtil.CreateEnv(),
-            ChatHistoryProvider = new InMemoryChatHistoryProvider()
+            ChatHistoryProvider = new InMemoryChatHistoryProvider(),
         };
 
         Console.WriteLine("maf MultiStreamingTurn turn 1");
@@ -110,9 +109,11 @@ internal static class MafExample
         Console.WriteLine();
         Console.WriteLine("maf MultiStreamingTurn turn 1 end");
 
-
         Console.WriteLine("maf MultiStreamingTurn turn 2");
-        response = agent.RunStreamingAsync("Now add some emojis to the joke and tell it in the voice of a pirate's parrot.", session);
+        response = agent.RunStreamingAsync(
+            "Now add some emojis to the joke and tell it in the voice of a pirate's parrot.",
+            session
+        );
         await foreach (var update in response)
         {
             if (update != null)
@@ -122,7 +123,6 @@ internal static class MafExample
         }
         Console.WriteLine();
         Console.WriteLine("maf MultiStreamingTurn turn 2 end");
-
 
         var msg = await agent.SerializeSessionAsync(session);
         // {"sessionId":"<Guid>","stateBag":{}}
