@@ -9,6 +9,7 @@ public record ClaudeCodeOptions
 {
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
     public int MaxThinkingTokens { get; init; } = 8000;
+    public bool IncludePartialMessages { get; init; }
     public string? SystemPrompt { get; init; }
     public string? AppendSystemPrompt { get; init; }
     public IReadOnlyDictionary<string, IMcpServerConfig> McpServers { get; init; } = new Dictionary<string, IMcpServerConfig>();

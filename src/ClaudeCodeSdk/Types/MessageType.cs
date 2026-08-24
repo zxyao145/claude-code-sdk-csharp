@@ -15,6 +15,8 @@ public readonly struct MessageType : IEquatable<MessageType>
 
     public static MessageType Result { get; } = new("result");
 
+    public static MessageType StreamEvent { get; } = new("stream_event");
+
 
     public string Value { get; }
 

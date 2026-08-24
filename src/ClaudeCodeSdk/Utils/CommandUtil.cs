@@ -80,6 +80,9 @@ internal class CommandUtil
     {
         var cmd = new List<string> { "--output-format", "stream-json", "--verbose" };
 
+        if (options.IncludePartialMessages)
+            cmd.Add("--include-partial-messages");
+
         if (!string.IsNullOrEmpty(options.SystemPrompt))
             cmd.AddRange(new[] { "--system-prompt", options.SystemPrompt });
 

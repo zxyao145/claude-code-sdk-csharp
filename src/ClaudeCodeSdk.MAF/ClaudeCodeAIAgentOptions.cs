@@ -9,6 +9,7 @@ public record ClaudeCodeAIAgentOptions
     #region ClaudeCodeOptions
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
     public int MaxThinkingTokens { get; init; } = 8000;
+    public bool IncludePartialMessages { get; init; }
     public string? SystemPrompt { get; init; }
     public string? AppendSystemPrompt { get; init; }
     public IReadOnlyDictionary<string, IMcpServerConfig> McpServers { get; init; } = new Dictionary<string, IMcpServerConfig>();
@@ -60,6 +61,7 @@ public record ClaudeCodeAIAgentOptions
         {
             AllowedTools = claudeCodeOptions.AllowedTools,
             MaxThinkingTokens = claudeCodeOptions.MaxThinkingTokens,
+            IncludePartialMessages = claudeCodeOptions.IncludePartialMessages,
             SystemPrompt = claudeCodeOptions.SystemPrompt,
             AppendSystemPrompt = claudeCodeOptions.AppendSystemPrompt,
             McpServers = claudeCodeOptions.McpServers,
@@ -96,6 +98,7 @@ public record ClaudeCodeAIAgentOptions
         {
             AllowedTools = source.AllowedTools,
             MaxThinkingTokens = source.MaxThinkingTokens,
+            IncludePartialMessages = source.IncludePartialMessages,
             SystemPrompt = source.SystemPrompt,
             AppendSystemPrompt = source.AppendSystemPrompt,
             McpServers = source.McpServers,

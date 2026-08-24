@@ -171,12 +171,15 @@ foreach (var message in response.Messages)
 ### Using ChatHistoryProvider
 
 `ClaudeCodeAIAgentOptions.ChatHistoryProvider` lets you plug in custom chat-history storage
-and retrieval (for example: database, Redis, or your own in-memory cache).
+(for example: database, Redis, or your own in-memory cache).
 
 At runtime:
 
-- `InvokingAsync(...)` runs **before** the request is sent and can prepend/merge history with incoming user messages.
-- `InvokedAsync(...)` runs **after** a response is received and can persist new request/response messages.
+- `InvokingAsync(...)` runs **before** the request is sent. Claude Code resumes model history through its provider session ID, so stored messages are not resent as prompt input.
+- `InvokedAsync(...)` receives only new request messages plus completed response messages. With partial messages enabled, it can run multiple times during one agent run—once for each safely completed Assistant message and once for any final remainder.
+- Streaming updates are yielded immediately. A message becomes persistable only after both `message_stop` and its complete `AssistantMessage` arrive, then its updates are combined with `ToAgentResponse()`. Earlier completed Tool Use rounds remain stored if a later round is interrupted; the incomplete round is discarded.
+- `RunAsync(...)` and `RunStreamingAsync(...)` use the same completion and persistence state machine.
+- Without partial events, history keeps the compatible end-of-run aggregation fallback.
 
 Typical setup:
 
@@ -185,7 +188,7 @@ using ClaudeCodeSdk.MAF;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
-// Your ChatHistoryProvider implementation should load history in InvokingAsync
+// Your ChatHistoryProvider implementation can observe the request in InvokingAsync
 // and save new request/response messages in InvokedAsync.
 var options = new ClaudeCodeAIAgentOptions
 {
@@ -297,6 +300,55 @@ if (response.Usage != null)
 
 ## Architecture
 
+### Architecture Overview
+
+`ClaudeCodeAIAgent` adapts the core SDK to the `AIAgent` contract from `Microsoft.Agents.AI`.
+It delegates transport to the core package (`ClaudeQuery` for one-shot calls, `ClaudeSdkClient`
+for sessioned calls) and layers a streaming/state pipeline on top: `ClaudePartialMessageMapper`
+turns raw `StreamEvent`s into `AgentResponseUpdate`s, `ClaudeStreamingHistoryAccumulator`
+buffers them, and `ClaudeStreamingMessageProcessor` decides when a batch is safe to persist via
+`ChatHistoryProvider`.
+
+```mermaid
+flowchart TB
+    subgraph Consumer["Microsoft.Extensions.AI / Microsoft.Agents.AI"]
+        AIAgent["AIAgent interface"]
+    end
+
+    subgraph MAF["ClaudeCodeSdk.MAF"]
+        Agent["ClaudeCodeAIAgent"]
+        SM["ClaudeSdkClientManager"]
+        Sess["ClaudeCodeAgentSession"]
+        Opt["ClaudeCodeAIAgentOptions"]
+        Proc["ClaudeStreamingMessageProcessor"]
+        Mapper["ClaudePartialMessageMapper"]
+        Acc["ClaudeStreamingHistoryAccumulator"]
+        PB["ClaudeMafPromptBuilder"]
+        Ext["IMessageExtension"]
+    end
+
+    subgraph Core["ClaudeCodeSdk"]
+        Q["ClaudeQuery"]
+        C["ClaudeSdkClient"]
+        P["ClaudeProcess"]
+    end
+
+    AIAgent --> Agent
+    Agent --> SM
+    Agent --> Sess
+    Agent --> Opt
+    Agent --> Proc
+    Proc --> Mapper
+    Proc --> Acc
+    Agent --> PB
+    Agent --> Ext
+    Agent --> Q
+    Agent --> C
+    SM --> C
+    Q --> P
+    C --> P
+```
+
 ### ClaudeCodeAIAgent
 
 Main class implementing `AIAgent` from Microsoft.Agents.AI:
@@ -320,6 +372,7 @@ Configuration options wrapper that extends ClaudeCodeOptions:
 | Property | Description |
 |----------|-------------|
 | `MaxThinkingTokens` | Maximum tokens for Claude's reasoning (default: 8000) |
+| `IncludePartialMessages` | Emit token-level `AgentResponseUpdate` chunks (`false` by default) |
 | `SystemPrompt` | Custom system prompt |
 | `AppendSystemPrompt` | Additional system prompt to append |
 | `Model` | Claude model to use (e.g., "claude-sonnet-4-5") |
@@ -337,6 +390,133 @@ Configuration options wrapper that extends ClaudeCodeOptions:
 | `BaseUrl` | Custom API endpoint (overrides ANTHROPIC_BASE_URL) |
 | `EnvironmentVariables` | Additional environment variables |
 | `ChatHistoryProvider` | Custom history load/save hook (`InvokingAsync` / `InvokedAsync`) |
+
+### Run Flow (non-streaming)
+
+`RunAsync` collects the full conversation and returns a single `AgentResponse`. With a
+`ChatHistoryProvider` configured, it still runs the streaming state machine internally so that
+completed messages can be persisted incrementally.
+
+```mermaid
+sequenceDiagram
+    participant App as Your app
+    participant Agent as ClaudeCodeAIAgent
+    participant Prov as ChatHistoryProvider
+    participant Client as ClaudeSdkClient
+    participant CLI as Claude Code CLI
+
+    App->>Agent: RunAsync(messages, session)
+    Agent->>Prov: InvokingAsync(context)
+    Agent->>Agent: PrepareSessionAsync (create session if null)
+    Agent->>Agent: ClaudeMafPromptBuilder.Create(messages)
+    Agent->>Client: QueryAsync(content, sessionId)
+    Client->>CLI: write user message
+    loop until result message
+        CLI-->>Client: IMessage
+        Client-->>Agent: IMessage
+        Agent->>Agent: ToChatMessage() + accumulate
+        Agent->>Prov: InvokedAsync (per completed message)
+    end
+    Agent-->>App: AgentResponse (Messages + Usage)
+```
+
+### Streaming Pipeline
+
+`RunStreamingAsync` yields `AgentResponseUpdate`s as they arrive. The processor feeds every
+`IMessage` through the mapper, yields the updates immediately, and persists a history batch only
+once a message is complete.
+
+```mermaid
+sequenceDiagram
+    participant App as Your app
+    participant Agent as ClaudeCodeAIAgent
+    participant Proc as ClaudeStreamingMessageProcessor
+    participant Map as ClaudePartialMessageMapper
+    participant Acc as ClaudeStreamingHistoryAccumulator
+    participant CLI as Claude Code CLI
+
+    App->>Agent: RunStreamingAsync(messages, session)
+    Agent->>CLI: QueryAsync(content, sessionId)
+    loop per message / stream_event
+        CLI-->>Agent: StreamEvent / AssistantMessage / ResultMessage
+        Agent->>Proc: Process(message)
+        Proc->>Map: Map(message) -> AgentResponseUpdate[]
+        Proc->>Acc: Add(updates)
+        Agent-->>App: yield each AgentResponseUpdate
+        Proc->>Proc: TryConsumeCompletedMessageId -> CompleteAssistantMessage
+        Agent->>Agent: PersistStreamingBatch (InvokedAsync)
+    end
+    Proc->>Proc: CompleteRun() -> final batch
+    Agent->>Agent: PersistStreamingBatch (InvokedAsync)
+```
+
+With `IncludePartialMessages` enabled, the CLI emits raw `stream_event`s that the mapper
+reassembles. A single assistant message progresses through these states:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Streaming: message_start
+    Streaming --> Streaming: content_block_start
+    Streaming --> Streaming: content_block_delta
+    Streaming --> Streaming: content_block_stop (tool_use)
+    Streaming --> Streaming: message_delta (stop_reason)
+    Streaming --> Stopped: message_stop
+    Stopped --> Persistable: AssistantMessage snapshot received
+    Persistable --> [*]: TryConsumeCompletedMessageId
+```
+
+A message only becomes persistable once **both** `message_stop` and the complete
+`AssistantMessage` have arrived — tracked via `_streamStoppedMessageIds` and
+`_assistantSnapshotMessageIds`. Already-streamed content blocks are deduplicated through
+`EmittedContentIndexes`, so the trailing `AssistantMessage` only emits the content blocks that
+were not streamed incrementally.
+
+### Session & Client Lifecycle
+
+The transport is chosen per call: a missing/non-`ClaudeCodeAgentSession` session uses one-shot
+`ClaudeQuery`; a real session reuses a connected `ClaudeSdkClient` via
+`ClaudeSdkClientManager`, which disposes and reconnects when the session ID changes.
+
+```mermaid
+flowchart LR
+    A["RunAsync / RunStreamingAsync(session)"] --> B{"session is ClaudeCodeAgentSession?"}
+    B -- no --> Q["ClaudeQuery.QueryAsync (one-shot)"]
+    B -- yes --> M["ClaudeSdkClientManager.GetClientAsync(sessionId)"]
+    M --> C{"client connected for this sessionId?"}
+    C -- yes --> R["reuse client"]
+    C -- no --> D["dispose old client"]
+    D --> N["create + connect new ClaudeSdkClient"]
+    N --> R
+    R --> X["client.QueryAsync + ReceiveResponseAsync"]
+```
+
+### History Persistence
+
+When `ChatHistoryProvider` is configured, `InvokingAsync` runs before the request (Claude Code
+resumes model history by session ID, so stored messages are not resent). `InvokedAsync` then
+fires with each safely-completed assistant message plus a final remainder at end of run.
+
+```mermaid
+sequenceDiagram
+    participant Agent as ClaudeCodeAIAgent
+    participant Proc as ClaudeStreamingMessageProcessor
+    participant Acc as ClaudeStreamingHistoryAccumulator
+    participant Prov as ChatHistoryProvider
+
+    Agent->>Proc: Process(message)
+    Proc->>Acc: Add(updates)
+    Proc->>Proc: TryConsumeCompletedMessageId
+    alt message_stop AND AssistantMessage both arrived
+        Proc->>Acc: CompleteAssistantMessage(id)
+        Proc-->>Agent: ClaudeHistoryBatch
+        Agent->>Prov: InvokedAsync(request + completed response)
+    end
+    Note over Agent,Prov: end of run
+    Agent->>Proc: CompleteRun()
+    Proc->>Acc: CompleteRun()
+    Proc-->>Agent: final ClaudeHistoryBatch
+    Agent->>Prov: InvokedAsync(final remainder)
+```
 
 ## Content Type Conversions
 
@@ -361,7 +541,7 @@ The integration automatically converts between Claude Code content blocks and MA
 - Session IDs are generated when creating/deserializing `ClaudeCodeAgentSession`
 - Multi-turn conversations use the session ID passed to `ClaudeSdkClient.QueryAsync(...)`
 - AgentSession can be serialized/deserialized with their session ID preserved
-- If `ChatHistoryProvider` is configured, the agent calls provider hooks before and after each run to load/store conversation history
+- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run and may call the invoked hook after each completed Assistant message; Claude Code resumes model history by session ID, while the provider stores staged application history
 
 ### Connection Lifecycle
 - Non-session calls use one-shot `ClaudeQuery.QueryAsync(...)`

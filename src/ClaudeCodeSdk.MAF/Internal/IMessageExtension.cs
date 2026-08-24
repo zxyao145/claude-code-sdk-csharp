@@ -7,30 +7,22 @@ namespace ClaudeCodeSdk.MAF;
 
 internal static partial class IMessageExtension
 {
-    private const string AGENT_NAME = "claude-code";
+    internal const string AgentName = "claude-code";
 
     public static AgentResponseUpdate? ToAgentRunResponseUpdate(this IMessage claudeMessage)
     {
-        if (claudeMessage is AssistantMessage assistantMsg
-            && assistantMsg.Content.Count > 0)
+        if (claudeMessage is AssistantMessage assistantMsg && assistantMsg.Content.Count > 0)
         {
-            var res = new AgentResponseUpdate
-            {
-                MessageId = claudeMessage.Id,
-                Role = ChatRole.Assistant,
-                AuthorName = assistantMsg.Model,
-                AdditionalProperties = new AdditionalPropertiesDictionary
-                {
-                    { "agentName", AGENT_NAME }, { "type", claudeMessage.Type.Value },
-                },
-            };
-            res.Contents = ConvertContent(assistantMsg.Content);
-            return res;
+            return CreateAssistantUpdate(assistantMsg, assistantMsg.Content);
         }
 
         if (claudeMessage is SystemMessage systemMessage)
         {
-            AIContent content = string.Equals(systemMessage.Subtype, "api_retry", StringComparison.Ordinal)
+            AIContent content = string.Equals(
+                systemMessage.Subtype,
+                "api_retry",
+                StringComparison.Ordinal
+            )
                 ? new ErrorContent(GetApiRetryErrorMessage(systemMessage))
                 : new TextContent(JsonUtil.Serialize(systemMessage.Data));
 
@@ -40,9 +32,9 @@ internal static partial class IMessageExtension
                 Role = ChatRole.System,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    { "agentName", AGENT_NAME },
+                    { "agentName", AgentName },
                     { "type", claudeMessage.Type.Value },
-                    { "subtype", systemMessage.Subtype }
+                    { "subtype", systemMessage.Subtype },
                 },
                 Contents = [content],
             };
@@ -51,16 +43,18 @@ internal static partial class IMessageExtension
         if (claudeMessage is UserMessage userMessage)
         {
             var blocks = (userMessage.Content as IEnumerable<IContentBlock>)?.ToList();
-            var role = blocks is { Count: > 0 } && blocks.All(static block => block is ToolResultBlock)
-                ? ChatRole.Tool
-                : ChatRole.User;
+            var role =
+                blocks is { Count: > 0 } && blocks.All(static block => block is ToolResultBlock)
+                    ? ChatRole.Tool
+                    : ChatRole.User;
             var res = new AgentResponseUpdate
             {
                 MessageId = claudeMessage.Id,
                 Role = role,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    { "agentName", AGENT_NAME }, { "type", claudeMessage.Type.Value },
+                    { "agentName", AgentName },
+                    { "type", claudeMessage.Type.Value },
                 },
             };
 
@@ -75,7 +69,10 @@ internal static partial class IMessageExtension
             }
             else
             {
-                res.Contents = [new TextContent($"{userMessage.Content?.ToString() ?? string.Empty}")];
+                res.Contents =
+                [
+                    new TextContent($"{userMessage.Content?.ToString() ?? string.Empty}"),
+                ];
             }
 
             return res;
@@ -88,16 +85,19 @@ internal static partial class IMessageExtension
             string? result = resultMessage.Result;
             if (resultMessage.IsError)
             {
-                contents.Add(new ErrorContent(
-                    string.IsNullOrWhiteSpace(result)
-                        ? $"Claude Code execution failed: {resultMessage.Subtype}."
-                        : result)
-                {
-                    AdditionalProperties = new AdditionalPropertiesDictionary
+                contents.Add(
+                    new ErrorContent(
+                        string.IsNullOrWhiteSpace(result)
+                            ? $"Claude Code execution failed: {resultMessage.Subtype}."
+                            : result
+                    )
                     {
-                        ["isFatalError"] = true,
-                    },
-                });
+                        AdditionalProperties = new AdditionalPropertiesDictionary
+                        {
+                            ["isFatalError"] = true,
+                        },
+                    }
+                );
             }
             else if (!string.IsNullOrWhiteSpace(result))
             {
@@ -119,10 +119,10 @@ internal static partial class IMessageExtension
                     Role = ChatRole.System,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        { "agentName", AGENT_NAME },
+                        { "agentName", AgentName },
                         { "type", claudeMessage.Type.Value },
                         { "subtype", resultMessage.Subtype },
-                        { "totalCostUsd", resultMessage.TotalCostUsd }
+                        { "totalCostUsd", resultMessage.TotalCostUsd },
                     },
                     Contents = contents,
                 };
@@ -132,6 +132,24 @@ internal static partial class IMessageExtension
         return null;
     }
 
+    internal static AgentResponseUpdate CreateAssistantUpdate(
+        AssistantMessage assistantMessage,
+        IEnumerable<IContentBlock> contents
+    ) =>
+        new()
+        {
+            MessageId = assistantMessage.Id,
+            Role = ChatRole.Assistant,
+            AuthorName = assistantMessage.Model,
+            RawRepresentation = assistantMessage,
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                { "agentName", AgentName },
+                { "type", assistantMessage.Type.Value },
+            },
+            Contents = ConvertContent(contents),
+        };
+
     private static List<AIContent> ConvertContent(IEnumerable<IContentBlock> contents)
     {
         var aiContents = new List<AIContent>();
@@ -140,9 +158,12 @@ internal static partial class IMessageExtension
         {
             if (item is ToolResultBlock toolResultBlock)
             {
-                aiContents.Add(new FunctionResultContent(
-                    toolResultBlock.ToolUseId,
-                    toolResultBlock.ToolUseResult ?? toolResultBlock.Content));
+                aiContents.Add(
+                    new FunctionResultContent(
+                        toolResultBlock.ToolUseId,
+                        toolResultBlock.ToolUseResult ?? toolResultBlock.Content
+                    )
+                );
 
                 if (toolResultBlock.IsError == true)
                 {
@@ -154,23 +175,21 @@ internal static partial class IMessageExtension
 
             AIContent? content = item switch
             {
-                TextBlock textBlock =>
-                    new TextContent(textBlock.Text),
+                TextBlock textBlock => new TextContent(textBlock.Text),
 
-                ErrorContentBlock errorBlock =>
-                    new ErrorContent(errorBlock.Message ?? "Claude Code execution failed, unknown cause."),
+                ErrorContentBlock errorBlock => new ErrorContent(
+                    errorBlock.Message ?? "Claude Code execution failed, unknown cause."
+                ),
 
-                ThinkingBlock thinkingBlock =>
-                    new TextReasoningContent(thinkingBlock.Thinking),
+                ThinkingBlock thinkingBlock => new TextReasoningContent(thinkingBlock.Thinking),
 
-                ToolUseBlock toolUseBlock =>
-                    new FunctionCallContent(
-                        toolUseBlock.Id,
-                        toolUseBlock.Name,
-                        toolUseBlock.Input.ToDictionary(x => x.Key, x => (object?)x.Value)
-                    ),
+                ToolUseBlock toolUseBlock => new FunctionCallContent(
+                    toolUseBlock.Id,
+                    toolUseBlock.Name,
+                    toolUseBlock.Input.ToDictionary(x => x.Key, x => (object?)x.Value)
+                ),
 
-                _ => null
+                _ => null,
             };
 
             if (content != null)
@@ -197,8 +216,10 @@ internal static partial class IMessageExtension
             : $"Claude Code API retry {attempt}/{maxRetries}: {error}";
     }
 
-    private static string? GetSystemDataText(IReadOnlyDictionary<string, object> data, string key) =>
-        data.TryGetValue(key, out var value) ? value?.ToString() : null;
+    private static string? GetSystemDataText(
+        IReadOnlyDictionary<string, object> data,
+        string key
+    ) => data.TryGetValue(key, out var value) ? value?.ToString() : null;
 
     private static string GetToolResultErrorMessage(ToolResultBlock toolResultBlock)
     {
@@ -232,7 +253,7 @@ internal static partial class IMessageExtension
             AdditionalCounts = new AdditionalPropertiesDictionary<long>
             {
                 { "cacheReadInputTokens", usage.CacheReadInputTokens },
-            }
+            },
         };
 
         return usageDetails;

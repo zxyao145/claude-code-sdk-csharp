@@ -462,11 +462,57 @@ await foreach (var message in ClaudeQuery.QueryAsync("Solve this puzzle...", opt
 
 ## Architecture
 
+### Architecture Overview
+
+The SDK is layered around a single child process. `ClaudeProcess` owns the Claude Code CLI
+subprocess and drives a JSON-lines protocol over its `stdin`/`stdout` pipes. Every public entry
+point — one-shot `ClaudeQuery`, the interactive `ClaudeSdkClient`, and the static
+`ClaudeCodeSDK` facade — ultimately delegates to this process manager. Two cross-cutting helpers
+sit inside the read loop: `ControlProtocolHandler` intercepts out-of-band permission requests,
+and `MessageParser` turns raw JSON lines into strongly-typed `IMessage` objects.
+
+```mermaid
+flowchart TB
+    subgraph Consumer["Your application"]
+        SDK["ClaudeCodeSDK (static facade)"]
+        Q["ClaudeQuery.QueryAsync()"]
+        C["ClaudeSdkClient"]
+    end
+
+    subgraph Core["ClaudeCodeSdk (core package)"]
+        P["ClaudeProcess"]
+        CP["ControlProtocolHandler"]
+        MP["MessageParser"]
+        CU["CommandUtil"]
+        JU["JsonUtil"]
+    end
+
+    subgraph CLI["Claude Code CLI (child process)"]
+        CLINode["claude --output-format stream-json"]
+    end
+
+    SDK --> Q
+    SDK --> C
+    Q --> P
+    C --> P
+    P --> CU
+    P --> JU
+    P --> CP
+    P --> MP
+    P <-->|"stdin / stdout JSON lines"| CLINode
+```
+
 ### Core Components
 
+- **`ClaudeCodeSDK`** - Static entry-point facade
+  - `QueryAsync(...)` convenience wrapper over `ClaudeQuery`
+  - `CreateClient(...)` factory for `ClaudeSdkClient`
+  - Exposes the SDK `Version` constant
+
 - **`ClaudeProcess`** - Unified subprocess manager
-  - Handles Claude Code CLI lifecycle (start, communication, cleanup)
-  - JSON-based message protocol with strongly-typed parsing
+  - Owns the Claude Code CLI lifecycle (discovery, start, communication, cleanup)
+  - Writes JSON lines to `stdin` and reads JSON lines from `stdout`
+  - Routes stdout lines through `ControlProtocolHandler` before `MessageParser`
   - Automatic CLI discovery via `CommandUtil`
   - Shared by both `ClaudeQuery` and `ClaudeSdkClient`
 
@@ -478,16 +524,144 @@ await foreach (var message in ClaudeQuery.QueryAsync("Solve this puzzle...", opt
 - **`ClaudeSdkClient`** - Interactive client API
   - Long-lived sessions with manual lifecycle control
   - Multi-turn conversation support
-  - Methods: `ConnectAsync()`, `DisconnectAsync()`, `QueryAsync()`, `ReceiveResponseAsync()`
+  - Methods: `ConnectAsync()`, `DisconnectAsync()`, `QueryAsync()`, `ReceiveResponseAsync()`, `InterruptAsync()`
+
+- **`ControlProtocolHandler`** - Out-of-band tool permission broker
+  - Intercepts `control_request` / `control_cancel_request` / `control_response` lines
+  - Invokes the `CanUseTool` callback and writes `control_response` back to `stdin`
 
 - **`MessageParser`** - Type-safe message parsing
   - Converts JSON to strongly-typed `IMessage` objects
+  - Dispatches on the `type` field: `system`, `assistant`, `user`, `result`, `stream_event`
   - Handles polymorphic content blocks
   - Comprehensive error reporting with line numbers
+
+- **`CommandUtil`** - CLI argument builder
+  - Translates `ClaudeCodeOptions` into the `claude` command line
+  - Adds `--include-partial-messages` and `--permission-prompt-tool stdio` when enabled
 
 - **`JsonUtil`** - Serialization helpers
   - `snake_case_lower` naming policy for CLI compatibility
   - Consistent across all message exchanges
+
+### Core Data Flow
+
+All traffic is newline-delimited JSON. Requests are serialized to a single line on `stdin`;
+responses arrive as lines on `stdout`. The read loop terminates when a `result` message is
+received.
+
+**One-shot query** (`ClaudeQuery`):
+
+```mermaid
+sequenceDiagram
+    participant App as Your app
+    participant Q as ClaudeQuery
+    participant P as ClaudeProcess
+    participant CLI as Claude Code CLI
+
+    App->>Q: QueryAsync(prompt, options)
+    Q->>P: new ClaudeProcess(options)
+    Q->>P: StartAsync(prompt)
+    P->>CLI: start subprocess (CommandUtil.BuildCommand)
+    P->>CLI: write user message to stdin
+    loop until result message
+        CLI-->>P: JSON line on stdout
+        P->>P: ControlProtocolHandler.TryHandle()
+        P->>P: MessageParser.ParseMessage()
+        P-->>Q: yield IMessage
+        Q-->>App: yield IMessage
+    end
+    Q->>P: DisposeAsync() (terminate process)
+```
+
+**Interactive client** (`ClaudeSdkClient`):
+
+```mermaid
+sequenceDiagram
+    participant App as Your app
+    participant C as ClaudeSdkClient
+    participant P as ClaudeProcess
+    participant CLI as Claude Code CLI
+
+    App->>C: ConnectAsync()
+    C->>P: StartAsync()
+    P->>CLI: start subprocess
+    App->>C: QueryAsync("...")
+    C->>P: SendAsync(messages)
+    P->>CLI: write JSON lines to stdin
+    App->>C: ReceiveResponseAsync()
+    loop until result message
+        CLI-->>P: JSON line on stdout
+        P-->>C: IMessage
+        C-->>App: IMessage
+    end
+    App->>C: DisconnectAsync() / DisposeAsync()
+```
+
+### Control Protocol
+
+When Claude Code needs to run a tool, it can emit a `control_request` on `stdout` instead of
+using its built-in permission prompts. The SDK answers it through the `CanUseTool` callback and
+writes a matching `control_response` back to `stdin` — all while the message stream keeps
+flowing.
+
+```mermaid
+sequenceDiagram
+    participant CLI as Claude Code CLI
+    participant P as ClaudeProcess
+    participant CP as ControlProtocolHandler
+    participant App as CanUseTool callback
+
+    CLI-->>P: control_request (subtype: can_use_tool)
+    P->>CP: TryHandle(line)
+    CP->>CP: StartRequest, track pending by request_id
+    CP->>App: await CanUseTool(toolName, input, context)
+    App-->>CP: PermissionResultAllow / PermissionResultDeny
+    CP->>P: write control_response to stdin
+    P->>CLI: control_response
+```
+
+The handler is asynchronous and non-blocking: requests are tracked in a
+`ConcurrentDictionary<request_id, CancellationTokenSource>` so multiple permission checks can
+be in flight concurrently, and `control_cancel_request` cancels a pending check. Enable it by
+setting `ClaudeCodeOptions.CanUseTool`; `CommandUtil` then passes `--permission-prompt-tool
+stdio` to the CLI.
+
+### Message & Type System
+
+`IMessage` is the base interface for everything read from `stdout`:
+
+```mermaid
+flowchart TB
+    IMessage["IMessage"] --> AM["AssistantMessage"]
+    IMessage --> UM["UserMessage"]
+    IMessage --> SM["SystemMessage"]
+    IMessage --> RM["ResultMessage"]
+    IMessage --> SE["StreamEvent"]
+```
+
+`AssistantMessage` (and `UserMessage`) content is a polymorphic list of `IContentBlock`s:
+
+```mermaid
+flowchart TB
+    IContentBlock["IContentBlock"] --> TB["TextBlock"]
+    IContentBlock --> ThB["ThinkingBlock"]
+    IContentBlock --> TUB["ToolUseBlock"]
+    IContentBlock --> TRB["ToolResultBlock"]
+    IContentBlock --> ECB["ErrorContentBlock"]
+```
+
+Errors are modeled as a hierarchy rooted at `ClaudeSDKException`:
+
+```mermaid
+flowchart TB
+    Base["ClaudeSDKException"] --> Conn["CLIConnectionException"]
+    Conn --> NotFound["CLINotFoundException"]
+    Base --> Proc["ProcessException"]
+    Base --> Json["CLIJsonDecodeException"]
+    Base --> Parse["MessageParseException"]
+    Base --> Dup["SessionIdDuplicateException"]
+```
 
 ### Resource Management
 
@@ -827,7 +1001,7 @@ See [LICENSE.txt](../../LICENSE.txt) for details.
 
 - **[Claude Code CLI](https://github.com/anthropics/claude-code)** - The official Claude Code command-line interface
 - **[ClaudeCodeSdk.MAF](../ClaudeCodeSdk.MAF/)** - Microsoft Agent Framework integration
-- **[D-System](https://github.com/zxyao145/D-System)** - ASP.NET Core backend using this SDK for agent management
+- **[Agw](https://github.com/zxyao145/Agw)** - ASP.NET Core backend using this SDK for agent management
 
 ## Support
 

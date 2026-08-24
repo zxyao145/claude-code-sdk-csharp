@@ -67,6 +67,7 @@ internal static class MessageParser
             "assistant" => ParseAssistantMessage(jsonLine),
             "user" => ParseUserMessage(jsonLine),
             "result" => ParseResultMessage(jsonLine),
+            "stream_event" => ParseStreamEvent(jsonLine),
             _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonLine)
         };
     }
@@ -159,6 +160,8 @@ internal static class MessageParser
                     Content = [errorBlock],
                     Model = modelElement.GetString()!,
                     SessionId = sessionIdElement.GetString()!,
+                    ApiMessageId = GetOptionalString(messageElement, "id"),
+                    ParentToolUseId = GetOptionalString(msgData, "parent_tool_use_id"),
                 };
             }
 
@@ -168,11 +171,36 @@ internal static class MessageParser
                 Content = contentBlocks,
                 Model = modelElement.GetString()!,
                 SessionId = sessionIdElement.GetString()!,
+                ApiMessageId = GetOptionalString(messageElement, "id"),
+                ParentToolUseId = GetOptionalString(msgData, "parent_tool_use_id"),
             };
         }
         catch (Exception ex) when (ex is not MessageParseException)
         {
             throw new MessageParseException($"Error parsing assistant message: {ex.Message}", msgData);
+        }
+    }
+
+    private static StreamEvent ParseStreamEvent(JsonElement msgData)
+    {
+        try
+        {
+            if (!msgData.TryGetProperty("event", out var eventElement))
+            {
+                throw new MessageParseException("Missing required field in stream event: event", msgData);
+            }
+
+            return new StreamEvent
+            {
+                Id = GetRequiredString(msgData, UUID),
+                SessionId = GetRequiredString(msgData, "session_id"),
+                ParentToolUseId = GetOptionalString(msgData, "parent_tool_use_id"),
+                Event = eventElement.Clone(),
+            };
+        }
+        catch (Exception ex) when (ex is not MessageParseException)
+        {
+            throw new MessageParseException($"Error parsing stream event: {ex.Message}", msgData);
         }
     }
 

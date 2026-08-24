@@ -1,5 +1,4 @@
 using ClaudeCodeSdk.Types;
-
 using Microsoft.Extensions.AI;
 
 namespace ClaudeCodeSdk.MAF;
@@ -10,8 +9,9 @@ internal static partial class IMessageExtension
     {
         return message switch
         {
-            AssistantMessage or SystemMessage or UserMessage or ResultMessage =>
-                message.ToAgentRunResponseUpdate()?.ToChatMessage(),
+            AssistantMessage or SystemMessage or UserMessage or ResultMessage => message
+                .ToAgentRunResponseUpdate()
+                ?.ToChatMessage(),
             _ => null,
         };
 
@@ -24,7 +24,7 @@ internal static partial class IMessageExtension
 
         //        AdditionalProperties = new AdditionalPropertiesDictionary
         //        {
-        //            { "agentName", AGENT_NAME },
+        //            { "agentName", AgentName },
         //            { "type", claudeMessage.Type.Value },
         //            { "subtype" , systemMessage.Subtype}
         //        },
@@ -40,7 +40,7 @@ internal static partial class IMessageExtension
         //        Role = ChatRole.User,
         //        AdditionalProperties = new AdditionalPropertiesDictionary
         //        {
-        //            { "agentName", AGENT_NAME },
+        //            { "agentName", AgentName },
         //            { "type", claudeMessage.Type.Value },
         //        },
         //    };
