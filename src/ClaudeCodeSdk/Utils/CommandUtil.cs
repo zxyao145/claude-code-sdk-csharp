@@ -98,8 +98,9 @@ internal class CommandUtil
         if (!string.IsNullOrEmpty(options.Model))
             cmd.AddRange(new[] { "--model", options.Model });
 
-        if (!string.IsNullOrEmpty(options.PermissionPromptToolName))
-            cmd.AddRange(new[] { "--permission-prompt-tool", options.PermissionPromptToolName });
+        var permissionPromptToolName = ResolvePermissionPromptToolName(options);
+        if (!string.IsNullOrEmpty(permissionPromptToolName))
+            cmd.AddRange(new[] { "--permission-prompt-tool", permissionPromptToolName });
 
         if (options.PermissionMode != null)
             cmd.AddRange(new[] { "--permission-mode", options.PermissionMode.ToString() ?? "" });
@@ -148,6 +149,26 @@ internal class CommandUtil
         }
 
         return cmd;
+    }
+
+    private static string? ResolvePermissionPromptToolName(ClaudeCodeOptions options)
+    {
+        if (options.CanUseTool == null)
+        {
+            return options.PermissionPromptToolName;
+        }
+
+        if (
+            !string.IsNullOrEmpty(options.PermissionPromptToolName)
+            && !string.Equals(options.PermissionPromptToolName, "stdio", StringComparison.Ordinal)
+        )
+        {
+            throw new InvalidOperationException(
+                "CanUseTool requires PermissionPromptToolName to be unset or 'stdio'."
+            );
+        }
+
+        return "stdio";
     }
 
 }

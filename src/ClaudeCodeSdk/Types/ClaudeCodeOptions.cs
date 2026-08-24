@@ -1,5 +1,7 @@
 namespace ClaudeCodeSdk.Types;
 
+using System.Text.Json.Serialization;
+
 /// <summary>
 /// Query options for Claude SDK.
 /// </summary>
@@ -19,6 +21,8 @@ public record ClaudeCodeOptions
     public IReadOnlyList<string> DisallowedTools { get; init; } = [];
     public string? Model { get; init; }
     public string? PermissionPromptToolName { get; init; }
+    [JsonIgnore]
+    public CanUseToolCallback? CanUseTool { get; init; }
     public string? WorkingDirectory { get; init; }
     public string? Settings { get; init; }
     public IReadOnlyList<string> AddDirectories { get; init; } = [];

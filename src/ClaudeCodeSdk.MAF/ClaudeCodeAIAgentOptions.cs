@@ -1,5 +1,6 @@
 ﻿using ClaudeCodeSdk.Types;
 using Microsoft.Agents.AI;
+using System.Text.Json.Serialization;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -22,6 +23,8 @@ public record ClaudeCodeAIAgentOptions
     public IReadOnlyList<string> DisallowedTools { get; init; } = [];
     public string? Model { get; init; }
     public string? PermissionPromptToolName { get; init; }
+    [JsonIgnore]
+    public CanUseToolCallback? CanUseTool { get; init; }
     public string? WorkingDirectory { get; init; }
     public string? Settings { get; init; }
     public IReadOnlyList<string> AddDirectories { get; init; } = [];
@@ -69,6 +72,7 @@ public record ClaudeCodeAIAgentOptions
             DisallowedTools = claudeCodeOptions.DisallowedTools,
             Model = claudeCodeOptions.Model,
             PermissionPromptToolName = claudeCodeOptions.PermissionPromptToolName,
+            CanUseTool = claudeCodeOptions.CanUseTool,
             WorkingDirectory = claudeCodeOptions.WorkingDirectory,
             Settings = claudeCodeOptions.Settings,
             AddDirectories = claudeCodeOptions.AddDirectories,
@@ -104,6 +108,7 @@ public record ClaudeCodeAIAgentOptions
             DisallowedTools = source.DisallowedTools,
             Model = source.Model,
             PermissionPromptToolName = source.PermissionPromptToolName,
+            CanUseTool = source.CanUseTool,
             WorkingDirectory = source.WorkingDirectory,
             Settings = source.Settings,
             AddDirectories = source.AddDirectories,

@@ -16,6 +16,8 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     private readonly ClaudeCodeOptions _options;
     private readonly ILogger? _logger;
     private readonly string _cliPath;
+    private readonly SemaphoreSlim _stdinLock = new(1, 1);
+    private readonly ControlProtocolHandler _controlProtocol;
 
     private Process? _process;
     private StreamWriter? _stdin;
@@ -28,6 +30,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         _options = options;
         _logger = logger;
         _cliPath = cliPath ?? FindClaudeCli();
+        _controlProtocol = new ControlProtocolHandler(options.CanUseTool, WriteLineAsync, logger);
     }
 
     /// <summary>
@@ -73,17 +76,12 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     /// </summary>
     public async Task SendAsync(IEnumerable<Dictionary<string, object>> messages, CancellationToken cancellationToken = default)
     {
-        if (_stdin == null)
-            throw new CLIConnectionException("Not connected");
-
         foreach (var message in messages)
         {
             var json = JsonUtil.Serialize(message);
             _logger?.LogDebug("stdin WriteLine:{line}", json);
-            await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
+            await WriteLineAsync(json, cancellationToken);
         }
-
-        await _stdin.FlushAsync(cancellationToken);
     }
 
     /// <summary>
@@ -104,6 +102,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 break;
 
             if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            if (_controlProtocol.TryHandle(line, cancellationToken))
                 continue;
 
             var msg = MessageParser.ParseMessage(line, _logger);
@@ -194,8 +195,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                     };
 
                     var json = JsonUtil.Serialize(message);
-                    await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
-                    await _stdin.FlushAsync(cancellationToken);
+                    await WriteLineAsync(json, cancellationToken);
                     break;
                 }
 
@@ -204,11 +204,27 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                     await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
                     {
                         var json = JsonUtil.Serialize(message);
-                        await _stdin.WriteLineAsync(json.AsMemory(), cancellationToken);
+                        await WriteLineAsync(json, cancellationToken);
                     }
-                    await _stdin.FlushAsync(cancellationToken);
                     break;
                 }
+        }
+    }
+
+    private async Task WriteLineAsync(string line, CancellationToken cancellationToken)
+    {
+        await _stdinLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_stdin == null)
+                throw new CLIConnectionException("Not connected");
+
+            await _stdin.WriteLineAsync(line.AsMemory(), cancellationToken);
+            await _stdin.FlushAsync(cancellationToken);
+        }
+        finally
+        {
+            _stdinLock.Release();
         }
     }
 
@@ -335,6 +351,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
     private async Task CleanupProcessAsync()
     {
+        _controlProtocol.CancelAll();
         if (_process != null)
         {
             try

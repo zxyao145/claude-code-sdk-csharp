@@ -21,6 +21,7 @@ Package versions use the format `x.y.z` and may include a `-preview` suffix for 
 - ✅ **Session Management** - Multi-turn conversations with session support and automatic session lifecycle management
 - ✅ **Session Persistence** - Serialize/deserialize conversation sessions for storage
 - ✅ **Tool Integration** - Full support for Claude Code tools and MCP servers
+- ✅ **Human Input Callbacks** - Handle permissions and `AskUserQuestion` through the stdio control protocol
 - ✅ **Thinking Blocks** - Extended reasoning with configurable thinking tokens
 - ✅ **Usage Tracking** - Token usage and cost monitoring
 - ✅ **.NET 10.0 Ready** - Built on the latest .NET platform (compatible with .NET 8.0+)
@@ -243,6 +244,30 @@ var options = new ClaudeCodeOptions
     }
 };
 ```
+
+### Handling tool permissions and questions
+
+Set `CanUseTool` to handle Claude Code permission requests without a terminal. The SDK automatically configures
+`--permission-prompt-tool stdio`; the callback can remain pending while your application collects user input.
+
+```csharp
+var options = new ClaudeCodeOptions
+{
+    CanUseTool = async (toolName, input, context, cancellationToken) =>
+    {
+        if (toolName != "AskUserQuestion")
+        {
+            return new PermissionResultDeny($"Unsupported request: {toolName}");
+        }
+
+        var updatedInput = await CollectAnswersAsync(input, cancellationToken);
+        return new PermissionResultAllow(updatedInput);
+    }
+};
+```
+
+`PermissionResultAllow` preserves the original input when `UpdatedInput` is omitted. For `AskUserQuestion`, return the
+original `questions` plus an `answers` object. Cancelling the query also cancels the pending callback.
 
 ## Development
 
