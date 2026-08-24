@@ -1,5 +1,5 @@
-using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 
 namespace ClaudeCodeSdk;
 
@@ -32,7 +32,10 @@ public class ClaudeSdkClient : IAsyncDisposable
     /// </summary>
     /// <param name="prompt">Optional prompt string or async enumerable of messages</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task ConnectAsync(object? prompt = null, CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(
+        object? prompt = null,
+        CancellationToken cancellationToken = default
+    )
     {
         if (_process != null)
             throw new CLIConnectionException("Already connected. Call DisconnectAsync() first.");
@@ -48,7 +51,9 @@ public class ClaudeSdkClient : IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Async enumerable of parsed messages</returns>
-    public async IAsyncEnumerable<IMessage> ReceiveMessagesAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IMessage> ReceiveMessagesAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
@@ -65,7 +70,11 @@ public class ClaudeSdkClient : IAsyncDisposable
     /// <param name="prompt">String message or async enumerable of message dictionaries</param>
     /// <param name="sessionId">Session identifier for the conversation</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task QueryAsync(object prompt, string? sessionId = "default", CancellationToken cancellationToken = default)
+    public async Task QueryAsync(
+        object prompt,
+        string? sessionId = "default",
+        CancellationToken cancellationToken = default
+    )
     {
         if (_process == null)
             throw new CLIConnectionException("Not connected. Call ConnectAsync() first.");
@@ -80,10 +89,10 @@ public class ClaudeSdkClient : IAsyncDisposable
                 ["message"] = new Dictionary<string, object>
                 {
                     ["role"] = "user",
-                    ["content"] = stringPrompt
+                    ["content"] = stringPrompt,
                 },
                 ["parent_tool_use_id"] = null!,
-                ["session_id"] = sessionId
+                ["session_id"] = sessionId,
             };
 
             await _process.SendAsync(new[] { message }, cancellationToken);
@@ -105,7 +114,8 @@ public class ClaudeSdkClient : IAsyncDisposable
         {
             throw new ArgumentException(
                 "Prompt must be either a string or IAsyncEnumerable<Dictionary<string, object>>",
-                nameof(prompt));
+                nameof(prompt)
+            );
         }
     }
 
@@ -129,7 +139,9 @@ public class ClaudeSdkClient : IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Async enumerable of messages ending with a ResultMessage</returns>
-    public async IAsyncEnumerable<IMessage> ReceiveResponseAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IMessage> ReceiveResponseAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         await foreach (var message in ReceiveMessagesAsync(cancellationToken))
         {

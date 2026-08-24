@@ -1,6 +1,6 @@
-﻿using Microsoft.Agents.AI;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using System.Diagnostics.CodeAnalysis;
 
 namespace ClaudeCodeSdk.MAF;
 

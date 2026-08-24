@@ -8,5 +8,5 @@ public enum PermissionMode
     @default,
     acceptEdits,
     plan,
-    bypassPermissions
+    bypassPermissions,
 }

@@ -17,7 +17,6 @@ public readonly struct MessageType : IEquatable<MessageType>
 
     public static MessageType StreamEvent { get; } = new("stream_event");
 
-
     public string Value { get; }
 
     [JsonConstructor]
@@ -37,29 +36,33 @@ public readonly struct MessageType : IEquatable<MessageType>
         return !(left == right);
     }
 
-    public override bool Equals([NotNullWhen(true)] object? obj)
-        => obj is MessageType otherRole && Equals(otherRole);
+    public override bool Equals([NotNullWhen(true)] object? obj) =>
+        obj is MessageType otherRole && Equals(otherRole);
 
+    public bool Equals(MessageType other) =>
+        string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
 
-    public bool Equals(MessageType other)
-        => string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
-
-
-    public override int GetHashCode()
-        => StringComparer.OrdinalIgnoreCase.GetHashCode(Value);
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Value);
 
     public override string ToString() => Value;
 
     [EditorBrowsable(EditorBrowsableState.Never)]
     public sealed class Converter : JsonConverter<MessageType>
     {
-        public override MessageType Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override MessageType Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        )
         {
             return new(reader.GetString()!);
         }
 
-
-        public override void Write(Utf8JsonWriter writer, MessageType value, JsonSerializerOptions options)
+        public override void Write(
+            Utf8JsonWriter writer,
+            MessageType value,
+            JsonSerializerOptions options
+        )
         {
             ArgumentNullException.ThrowIfNull(writer);
             writer.WriteStringValue(value.Value);

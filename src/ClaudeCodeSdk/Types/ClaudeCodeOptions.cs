@@ -12,7 +12,8 @@ public record ClaudeCodeOptions
     public bool IncludePartialMessages { get; init; }
     public string? SystemPrompt { get; init; }
     public string? AppendSystemPrompt { get; init; }
-    public IReadOnlyDictionary<string, IMcpServerConfig> McpServers { get; init; } = new Dictionary<string, IMcpServerConfig>();
+    public IReadOnlyDictionary<string, IMcpServerConfig> McpServers { get; init; } =
+        new Dictionary<string, IMcpServerConfig>();
     public string? McpServersPath { get; init; }
     public PermissionMode? PermissionMode { get; init; }
     public bool ContinueConversation { get; init; } = false;
@@ -22,17 +23,16 @@ public record ClaudeCodeOptions
     public IReadOnlyList<string> DisallowedTools { get; init; } = [];
     public string? Model { get; init; }
     public string? PermissionPromptToolName { get; init; }
+
     [JsonIgnore]
     public CanUseToolCallback? CanUseTool { get; init; }
     public string? WorkingDirectory { get; init; }
     public string? Settings { get; init; }
     public IReadOnlyList<string> AddDirectories { get; init; } = [];
-    public IReadOnlyDictionary<string, string?> ExtraArgs { get; init; } = new Dictionary<string, string?>();
-
-
+    public IReadOnlyDictionary<string, string?> ExtraArgs { get; init; } =
+        new Dictionary<string, string?>();
 
     public List<string>? AddDirs { get; set; }
-
 
     /// <summary>
     /// ANTHROPIC_AUTH_TOKEN, and it will override the value in EnvironmentVariables if set.

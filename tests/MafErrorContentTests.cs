@@ -1,10 +1,7 @@
 using System.Text.Json;
-
 using ClaudeCodeSdk.MAF;
 using ClaudeCodeSdk.Types;
-
 using Microsoft.Extensions.AI;
-
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;
@@ -14,11 +11,10 @@ public class MafErrorContentTests
     [Fact]
     public void ToAgentRunResponseUpdate_ErrorResult_ReturnsFatalErrorAndUsage()
     {
-        var message = CreateResultMessage("quota exceeded", new Usage
-        {
-            InputTokens = 10,
-            OutputTokens = 2,
-        });
+        var message = CreateResultMessage(
+            "quota exceeded",
+            new Usage { InputTokens = 10, OutputTokens = 2 }
+        );
 
         var update = message.ToAgentRunResponseUpdate();
 
@@ -234,7 +230,8 @@ public class MafErrorContentTests
                 Assert.Equal("read_file", call.Name);
             },
             content => Assert.Equal("tool-1", Assert.IsType<FunctionResultContent>(content).CallId),
-            content => Assert.Equal("boom", Assert.IsType<ErrorContent>(content).Message));
+            content => Assert.Equal("boom", Assert.IsType<ErrorContent>(content).Message)
+        );
     }
 
     [Fact]
@@ -251,22 +248,24 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.System, chatMessage.Role);
-        Assert.Contains("ready", Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text);
+        Assert.Contains(
+            "ready",
+            Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
+        );
     }
 
     [Fact]
     public void ToChatMessage_IMessageUser_ReturnsUserMessage()
     {
-        IMessage message = new UserMessage
-        {
-            Id = "user-1",
-            Content = "tool output",
-        };
+        IMessage message = new UserMessage { Id = "user-1", Content = "tool output" };
 
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.User, chatMessage.Role);
-        Assert.Equal("tool output", Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text);
+        Assert.Equal(
+            "tool output",
+            Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
+        );
     }
 
     [Fact]
@@ -290,7 +289,10 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.Tool, chatMessage.Role);
-        Assert.Equal("tool-1", Assert.IsType<FunctionResultContent>(chatMessage.Contents[0]).CallId);
+        Assert.Equal(
+            "tool-1",
+            Assert.IsType<FunctionResultContent>(chatMessage.Contents[0]).CallId
+        );
         Assert.Equal("boom", Assert.IsType<ErrorContent>(chatMessage.Contents[1]).Message);
     }
 
@@ -320,11 +322,10 @@ public class MafErrorContentTests
     [Fact]
     public void ToChatMessage_IMessageResult_ReturnsFatalErrorAndUsage()
     {
-        IMessage message = CreateResultMessage("quota exceeded", new Usage
-        {
-            InputTokens = 10,
-            OutputTokens = 2,
-        });
+        IMessage message = CreateResultMessage(
+            "quota exceeded",
+            new Usage { InputTokens = 10, OutputTokens = 2 }
+        );
 
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
@@ -337,17 +338,17 @@ public class MafErrorContentTests
                 Assert.Equal("quota exceeded", error.Message);
                 Assert.True(Assert.IsType<bool>(error.AdditionalProperties!["isFatalError"]));
             },
-            content => Assert.IsType<UsageContent>(content));
+            content => Assert.IsType<UsageContent>(content)
+        );
     }
 
     [Fact]
     public void ToChatMessage_IMessageSuccessfulResult_ReturnsTextAndUsage()
     {
-        IMessage message = CreateResultMessage("done", new Usage
-        {
-            InputTokens = 10,
-            OutputTokens = 2,
-        }) with
+        IMessage message = CreateResultMessage(
+            "done",
+            new Usage { InputTokens = 10, OutputTokens = 2 }
+        ) with
         {
             IsError = false,
             Subtype = "success",
@@ -359,7 +360,8 @@ public class MafErrorContentTests
         Assert.Collection(
             chatMessage.Contents,
             content => Assert.Equal("done", Assert.IsType<TextContent>(content).Text),
-            content => Assert.IsType<UsageContent>(content));
+            content => Assert.IsType<UsageContent>(content)
+        );
     }
 
     [Fact]

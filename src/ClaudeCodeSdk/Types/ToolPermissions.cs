@@ -15,4 +15,5 @@ public abstract record PermissionResult;
 
 public sealed record PermissionResultAllow(JsonElement? UpdatedInput = null) : PermissionResult;
 
-public sealed record PermissionResultDeny(string Message, bool Interrupt = false) : PermissionResult;
+public sealed record PermissionResultDeny(string Message, bool Interrupt = false)
+    : PermissionResult;

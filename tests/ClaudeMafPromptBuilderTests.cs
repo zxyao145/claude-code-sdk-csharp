@@ -15,10 +15,12 @@ public class ClaudeMafPromptBuilderTests
                     ChatRole.User,
                     [
                         new DataContent(new byte[] { 1, 2, 3 }, "image/png"),
-                        new TextContent("describe this")
-                    ])
+                        new TextContent("describe this"),
+                    ]
+                ),
             ],
-            "session-1");
+            "session-1"
+        );
 
         var message = await GetSingleMessageAsync(prompt);
         Assert.Equal("session-1", message["session_id"]);
@@ -40,7 +42,8 @@ public class ClaudeMafPromptBuilderTests
     {
         var prompt = ClaudeMafPromptBuilder.Create(
             [new ChatMessage(ChatRole.User, [new DataContent(new byte[] { 1 }, "image/webp")])],
-            "default");
+            "default"
+        );
 
         var message = await GetSingleMessageAsync(prompt);
         var envelope = Assert.IsType<Dictionary<string, object>>(message["message"]);
@@ -55,7 +58,8 @@ public class ClaudeMafPromptBuilderTests
     {
         var prompt = ClaudeMafPromptBuilder.Create(
             [new ChatMessage(ChatRole.User, "hello")],
-            "default");
+            "default"
+        );
 
         Assert.Equal("hello", Assert.IsType<string>(prompt));
     }

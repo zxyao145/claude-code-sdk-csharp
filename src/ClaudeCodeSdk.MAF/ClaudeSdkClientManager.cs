@@ -29,9 +29,13 @@ internal sealed class ClaudeSdkClientManager : IAsyncDisposable
         _logger = logger;
     }
 
-    public async ValueTask<ClaudeSdkClient> GetClientAsync(ClaudeCodeAgentSession claudeCodeAgent, CancellationToken cancellationToken = default)
+    public async ValueTask<ClaudeSdkClient> GetClientAsync(
+        ClaudeCodeAgentSession claudeCodeAgent,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await GetClientAsync(claudeCodeAgent.SessionId, cancellationToken).ConfigureAwait(false);
+        return await GetClientAsync(claudeCodeAgent.SessionId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -42,7 +46,10 @@ internal sealed class ClaudeSdkClientManager : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token for async operations.</param>
     /// <returns>A connected ClaudeSdkClient instance for the specified session.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the manager has been disposed.</exception>
-    public async ValueTask<ClaudeSdkClient> GetClientAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    public async ValueTask<ClaudeSdkClient> GetClientAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -50,9 +57,11 @@ internal sealed class ClaudeSdkClientManager : IAsyncDisposable
         try
         {
             // Check if we need to create a new client for this session
-            if (_currentSessionId != sessionId
+            if (
+                _currentSessionId != sessionId
                 || _client == null
-                || _client.ConnectStatus != ConnectStatus.Connected)
+                || _client.ConnectStatus != ConnectStatus.Connected
+            )
             {
                 // Dispose old client if it exists
                 if (_client != null)
@@ -90,7 +99,8 @@ internal sealed class ClaudeSdkClientManager : IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
         await _lock.WaitAsync();
         try

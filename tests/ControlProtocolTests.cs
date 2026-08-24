@@ -46,7 +46,9 @@ public class ControlProtocolTests
     public async Task TryHandle_CanUseToolAllow_WritesUpdatedInputResponse()
     {
         // Arrange
-        var writtenLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writtenLine = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var updatedInput = JsonSerializer.SerializeToElement(
             new
             {
@@ -61,7 +63,9 @@ public class ControlProtocolTests
                 Assert.Equal("call-1", context.ToolUseId);
                 Assert.True(input.TryGetProperty("questions", out _));
                 Assert.False(cancellationToken.IsCancellationRequested);
-                return ValueTask.FromResult<PermissionResult>(new PermissionResultAllow(updatedInput));
+                return ValueTask.FromResult<PermissionResult>(
+                    new PermissionResultAllow(updatedInput)
+                );
             },
             (line, _) =>
             {
@@ -71,7 +75,10 @@ public class ControlProtocolTests
         );
 
         // Act
-        var handled = handler.TryHandle(CreateRequest("request-1"), TestContext.Current.CancellationToken);
+        var handled = handler.TryHandle(
+            CreateRequest("request-1"),
+            TestContext.Current.CancellationToken
+        );
         var responseLine = await writtenLine.Task.WaitAsync(
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken
@@ -87,7 +94,11 @@ public class ControlProtocolTests
         Assert.Equal("allow", permission.GetProperty("behavior").GetString());
         Assert.Equal(
             "A",
-            permission.GetProperty("updatedInput").GetProperty("answers").GetProperty("Choose?").GetString()
+            permission
+                .GetProperty("updatedInput")
+                .GetProperty("answers")
+                .GetProperty("Choose?")
+                .GetString()
         );
     }
 
@@ -95,10 +106,14 @@ public class ControlProtocolTests
     public async Task TryHandle_CanUseToolDeny_WritesDenyResponse()
     {
         // Arrange
-        var writtenLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writtenLine = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var handler = new ControlProtocolHandler(
             (_, _, _, _) =>
-                ValueTask.FromResult<PermissionResult>(new PermissionResultDeny("User cancelled.", Interrupt: false)),
+                ValueTask.FromResult<PermissionResult>(
+                    new PermissionResultDeny("User cancelled.", Interrupt: false)
+                ),
             (line, _) =>
             {
                 writtenLine.TrySetResult(line);
@@ -125,7 +140,9 @@ public class ControlProtocolTests
     public async Task TryHandle_CanUseToolAllowWithoutUpdatedInput_PreservesOriginalInput()
     {
         // Arrange
-        var writtenLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writtenLine = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var handler = new ControlProtocolHandler(
             (_, _, _, _) => ValueTask.FromResult<PermissionResult>(new PermissionResultAllow()),
             (line, _) =>
@@ -148,16 +165,25 @@ public class ControlProtocolTests
             .RootElement.GetProperty("response")
             .GetProperty("response")
             .GetProperty("updatedInput");
-        Assert.Equal("Choose?", input.GetProperty("questions")[0].GetProperty("question").GetString());
+        Assert.Equal(
+            "Choose?",
+            input.GetProperty("questions")[0].GetProperty("question").GetString()
+        );
     }
 
     [Fact]
     public async Task TryHandle_ControlCancelRequest_CancelsPendingCallbackWithoutWritingResponse()
     {
         // Arrange
-        var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var cancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var writeAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var cancellationObserved = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var writeAttempted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var handler = new ControlProtocolHandler(
             async (_, _, _, cancellationToken) =>
             {
@@ -181,7 +207,10 @@ public class ControlProtocolTests
 
         // Act
         handler.TryHandle(CreateRequest("request-3"), TestContext.Current.CancellationToken);
-        await callbackStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await callbackStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken
+        );
         var handled = handler.TryHandle(
             """{"type":"control_cancel_request","request_id":"request-3"}""",
             TestContext.Current.CancellationToken
@@ -200,7 +229,9 @@ public class ControlProtocolTests
     public async Task TryHandle_CallbackFailure_WritesErrorResponse()
     {
         // Arrange
-        var writtenLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writtenLine = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var handler = new ControlProtocolHandler(
             (_, _, _, _) => throw new InvalidOperationException("Callback failed."),
             (line, _) =>
@@ -250,27 +281,27 @@ public class ControlProtocolTests
 
     private static string CreateRequest(string requestId) =>
         $$"""
-        {
-          "type": "control_request",
-          "request_id": "{{requestId}}",
-          "request": {
-            "subtype": "can_use_tool",
-            "tool_name": "AskUserQuestion",
-            "tool_use_id": "call-1",
-            "input": {
-              "questions": [
-                {
-                  "question": "Choose?",
-                  "header": "Choice",
-                  "options": [
-                    { "label": "A", "description": "First" },
-                    { "label": "B", "description": "Second" }
-                  ],
-                  "multiSelect": false
+            {
+              "type": "control_request",
+              "request_id": "{{requestId}}",
+              "request": {
+                "subtype": "can_use_tool",
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": "call-1",
+                "input": {
+                  "questions": [
+                    {
+                      "question": "Choose?",
+                      "header": "Choice",
+                      "options": [
+                        { "label": "A", "description": "First" },
+                        { "label": "B", "description": "Second" }
+                      ],
+                      "multiSelect": false
+                    }
+                  ]
                 }
-              ]
+              }
             }
-          }
-        }
-        """;
+            """;
 }

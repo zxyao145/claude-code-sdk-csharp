@@ -14,5 +14,4 @@ public class ErrorContentBlock : IContentBlock
     public string? ErrorCode { get; set; }
 
     public string? Details { get; set; }
-
 }

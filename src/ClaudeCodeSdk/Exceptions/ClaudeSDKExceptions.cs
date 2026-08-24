@@ -8,9 +8,14 @@ namespace ClaudeCodeSdk.Exceptions;
 /// </summary>
 public class ClaudeSDKException : Exception
 {
-    public ClaudeSDKException() : base() { }
-    public ClaudeSDKException(string message) : base(message) { }
-    public ClaudeSDKException(string message, Exception innerException) : base(message, innerException) { }
+    public ClaudeSDKException()
+        : base() { }
+
+    public ClaudeSDKException(string message)
+        : base(message) { }
+
+    public ClaudeSDKException(string message, Exception innerException)
+        : base(message, innerException) { }
 }
 
 /// <summary>
@@ -18,9 +23,14 @@ public class ClaudeSDKException : Exception
 /// </summary>
 public class CLIConnectionException : ClaudeSDKException
 {
-    public CLIConnectionException() : base() { }
-    public CLIConnectionException(string message) : base(message) { }
-    public CLIConnectionException(string message, Exception innerException) : base(message, innerException) { }
+    public CLIConnectionException()
+        : base() { }
+
+    public CLIConnectionException(string message)
+        : base(message) { }
+
+    public CLIConnectionException(string message, Exception innerException)
+        : base(message, innerException) { }
 }
 
 /// <summary>
@@ -91,7 +101,8 @@ public class MessageParseException : ClaudeSDKException
 {
     public object? ExpData { get; }
 
-    public MessageParseException(string message, object? data = null) : base(message)
+    public MessageParseException(string message, object? data = null)
+        : base(message)
     {
         this.ExpData = data;
     }
@@ -104,7 +115,8 @@ public class SessionIdDuplicateException : ClaudeSDKException
 {
     public string? SessionId { get; }
 
-    public SessionIdDuplicateException(string? sessionId) : base($"Session ID {sessionId} is already in use.")
+    public SessionIdDuplicateException(string? sessionId)
+        : base($"Session ID {sessionId} is already in use.")
     {
         this.SessionId = sessionId;
     }

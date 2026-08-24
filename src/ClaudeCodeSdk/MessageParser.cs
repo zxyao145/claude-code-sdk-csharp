@@ -1,6 +1,6 @@
+using System.Text.Json;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace ClaudeCodeSdk;
 
@@ -18,7 +18,6 @@ internal static class MessageParser
     /// <param name="logger">Optional logger for debugging</param>
     /// <returns>Parsed Message object</returns>
     /// <exception cref="MessageParseException">If parsing fails or message type is unrecognized</exception>
-
     public static IMessage? ParseMessage(string line, ILogger? logger = null)
     {
         Dictionary<string, object>? data;
@@ -40,14 +39,14 @@ internal static class MessageParser
         return ParseMessage(jsonLineElement, logger);
     }
 
-
     private static IMessage ParseMessage(JsonElement jsonLine, ILogger? logger = null)
     {
         if (jsonLine.ValueKind != JsonValueKind.Object)
         {
             throw new MessageParseException(
                 $"Invalid message data type (expected Object, got {jsonLine.ValueKind})",
-                jsonLine);
+                jsonLine
+            );
         }
 
         if (!jsonLine.TryGetProperty("type", out JsonElement messageTypeEle))
@@ -68,19 +67,23 @@ internal static class MessageParser
             "user" => ParseUserMessage(jsonLine),
             "result" => ParseResultMessage(jsonLine),
             "stream_event" => ParseStreamEvent(jsonLine),
-            _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonLine)
+            _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonLine),
         };
     }
-
 
     private static UserMessage ParseUserMessage(JsonElement msgData)
     {
         try
         {
-            if (!msgData.TryGetProperty("message", out var messageElement) ||
-                !messageElement.TryGetProperty("content", out var contentElement))
+            if (
+                !msgData.TryGetProperty("message", out var messageElement)
+                || !messageElement.TryGetProperty("content", out var contentElement)
+            )
             {
-                throw new MessageParseException("Missing required field in user message: content", msgData);
+                throw new MessageParseException(
+                    "Missing required field in user message: content",
+                    msgData
+                );
             }
 
             object content;
@@ -103,11 +106,7 @@ internal static class MessageParser
                 throw new MessageParseException("Invalid content type in user message", msgData);
             }
 
-            return new UserMessage
-            {
-                Id = GetRequiredString(msgData, UUID),
-                Content = content
-            };
+            return new UserMessage { Id = GetRequiredString(msgData, UUID), Content = content };
         }
         catch (Exception ex) when (ex is not MessageParseException)
         {
@@ -121,22 +120,34 @@ internal static class MessageParser
         {
             if (!msgData.TryGetProperty("message", out var messageElement))
             {
-                throw new MessageParseException("Missing 'message' field in assistant message", msgData);
+                throw new MessageParseException(
+                    "Missing 'message' field in assistant message",
+                    msgData
+                );
             }
 
             if (!messageElement.TryGetProperty("content", out var contentElement))
             {
-                throw new MessageParseException("Missing 'content' field in assistant message", msgData);
+                throw new MessageParseException(
+                    "Missing 'content' field in assistant message",
+                    msgData
+                );
             }
 
             if (!messageElement.TryGetProperty("model", out var modelElement))
             {
-                throw new MessageParseException("Missing 'model' field in assistant message", msgData);
+                throw new MessageParseException(
+                    "Missing 'model' field in assistant message",
+                    msgData
+                );
             }
 
             if (!msgData.TryGetProperty("session_id", out var sessionIdElement))
             {
-                throw new MessageParseException("Missing 'session_id' field in assistant message", msgData);
+                throw new MessageParseException(
+                    "Missing 'session_id' field in assistant message",
+                    msgData
+                );
             }
 
             var contentBlocks = new List<IContentBlock>();
@@ -145,13 +156,12 @@ internal static class MessageParser
                 contentBlocks.Add(ParseContentBlock(blockElement, msgData));
             }
 
-
             if (msgData.TryGetProperty("error", out var errorElement))
             {
                 var errorString = errorElement.GetString() ?? "unknown error";
                 var errorBlock = new ErrorContentBlock(errorString)
                 {
-                    Details = contentElement.GetRawText()
+                    Details = contentElement.GetRawText(),
                 };
 
                 return new AssistantMessage
@@ -177,7 +187,10 @@ internal static class MessageParser
         }
         catch (Exception ex) when (ex is not MessageParseException)
         {
-            throw new MessageParseException($"Error parsing assistant message: {ex.Message}", msgData);
+            throw new MessageParseException(
+                $"Error parsing assistant message: {ex.Message}",
+                msgData
+            );
         }
     }
 
@@ -187,7 +200,10 @@ internal static class MessageParser
         {
             if (!msgData.TryGetProperty("event", out var eventElement))
             {
-                throw new MessageParseException("Missing required field in stream event: event", msgData);
+                throw new MessageParseException(
+                    "Missing required field in stream event: event",
+                    msgData
+                );
             }
 
             return new StreamEvent
@@ -210,15 +226,23 @@ internal static class MessageParser
         {
             if (!msgData.TryGetProperty("subtype", out var subtypeElement))
             {
-                throw new MessageParseException("Missing 'subtype' field in system message", msgData);
+                throw new MessageParseException(
+                    "Missing 'subtype' field in system message",
+                    msgData
+                );
             }
 
             if (!msgData.TryGetProperty("session_id", out var sessionIdElement))
             {
-                throw new MessageParseException("Missing 'session_id' field in system message", msgData);
+                throw new MessageParseException(
+                    "Missing 'session_id' field in system message",
+                    msgData
+                );
             }
 
-            var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(msgData.GetRawText());
+            var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(
+                msgData.GetRawText()
+            );
             dataDict.Remove("subtype");
 
             return new SystemMessage
@@ -226,7 +250,7 @@ internal static class MessageParser
                 Id = GetRequiredString(msgData, UUID),
                 Subtype = subtypeElement.GetString()!,
                 SessionId = sessionIdElement.GetString()!,
-                Data = dataDict
+                Data = dataDict,
             };
         }
         catch (Exception ex) when (ex is not MessageParseException)
@@ -250,7 +274,7 @@ internal static class MessageParser
                 SessionId = GetRequiredString(msgData, "session_id"),
                 TotalCostUsd = GetOptionalDouble(msgData, "total_cost_usd"),
                 Usage = GetOptional<Usage>(msgData, "usage"),
-                Result = GetOptionalString(msgData, "result")
+                Result = GetOptionalString(msgData, "result"),
             };
 
             return result;
@@ -263,7 +287,6 @@ internal static class MessageParser
 
     private static IContentBlock ParseContentBlock(JsonElement blockElement, JsonElement msgData)
     {
-
         if (!blockElement.TryGetProperty("type", out var typeElement))
         {
             throw new MessageParseException("Content block missing 'type' field", blockElement);
@@ -284,7 +307,7 @@ internal static class MessageParser
                 ToolUseId = GetRequiredString(blockElement, "tool_use_id"),
                 Content = GetOptionalObject(blockElement, "content"),
                 ToolUseResult = GetOptionalObject(msgData, "tool_use_result"),
-                IsError = isError
+                IsError = isError,
             };
         }
 
@@ -292,29 +315,29 @@ internal static class MessageParser
         {
             return blockType switch
             {
-                "text" => new TextBlock
-                {
-                    Text = GetRequiredString(blockElement, "text")
-                },
+                "text" => new TextBlock { Text = GetRequiredString(blockElement, "text") },
                 "thinking" => new ThinkingBlock
                 {
                     Thinking = GetRequiredString(blockElement, "thinking"),
-                    Signature = GetRequiredString(blockElement, "signature")
+                    Signature = GetRequiredString(blockElement, "signature"),
                 },
                 "tool_use" => new ToolUseBlock
                 {
                     Id = GetRequiredString(blockElement, "id"),
                     Name = GetRequiredString(blockElement, "name"),
-                    Input = GetRequiredDictionary(blockElement, "input")
+                    Input = GetRequiredDictionary(blockElement, "input"),
                 },
-                _ => throw new MessageParseException($"Unknown content block type: {blockType}", blockElement)
+                _ => throw new MessageParseException(
+                    $"Unknown content block type: {blockType}",
+                    blockElement
+                ),
             };
         }
 
         var errorDetails = blockElement.GetRawText();
         var error = new ErrorContentBlock($"parse {blockType} type message error")
         {
-            Details = errorDetails
+            Details = errorDetails,
         };
 
         return error;
@@ -324,7 +347,8 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return prop.GetString() ?? throw new MessageParseException($"Property '{propertyName}' is null", element);
+            return prop.GetString()
+                ?? throw new MessageParseException($"Property '{propertyName}' is null", element);
         }
         throw new MessageParseException($"Missing required property: {propertyName}", element);
     }
@@ -370,7 +394,10 @@ internal static class MessageParser
         return null;
     }
 
-    private static Dictionary<string, object> GetRequiredDictionary(JsonElement element, string propertyName)
+    private static Dictionary<string, object> GetRequiredDictionary(
+        JsonElement element,
+        string propertyName
+    )
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
