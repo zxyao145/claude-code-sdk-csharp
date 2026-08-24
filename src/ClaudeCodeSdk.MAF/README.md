@@ -324,6 +324,7 @@ Configuration options wrapper that extends ClaudeCodeOptions:
 | `AppendSystemPrompt` | Additional system prompt to append |
 | `Model` | Claude model to use (e.g., "claude-sonnet-4-5") |
 | `PermissionMode` | Tool permission mode (`@default`, `acceptEdits`, `plan`, `bypassPermissions`) |
+| `CanUseTool` | Async callback for permission requests and `AskUserQuestion` user input |
 | `AllowedTools` | List of allowed tools |
 | `DisallowedTools` | List of disallowed tools |
 | `McpServers` | MCP server configurations |

@@ -126,14 +126,9 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         if (content is not null)
         {
             var (asyncEnumMsgs, client) = await SendUserInput(null, content, cancellationToken);
+            using var cancellationRegistration = RegisterInterrupt(client, cancellationToken);
 
-            if (client != null && cancellationToken.IsCancellationRequested)
-            {
-                await InterruptAsync(client);
-                cancellationToken.ThrowIfCancellationRequested();
-            }
-
-            await foreach (var claudeMessage in asyncEnumMsgs)
+            await foreach (var claudeMessage in asyncEnumMsgs.WithCancellation(cancellationToken))
             {
                 if (claudeMessage is ResultMessage resultMessage)
                 {
@@ -183,16 +178,11 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         if (content is not null)
         {
             var (asyncEnumMsgs, client) = await SendUserInput(claudeThread, content, cancellationToken);
-
-            if (client != null && cancellationToken.IsCancellationRequested)
-            {
-                await InterruptAsync(client);
-                cancellationToken.ThrowIfCancellationRequested();
-            }
+            using var cancellationRegistration = RegisterInterrupt(client, cancellationToken);
 
             if (ChatHistoryProvider is null)
             {
-                await foreach (var claudeMessage in asyncEnumMsgs)
+                await foreach (var claudeMessage in asyncEnumMsgs.WithCancellation(cancellationToken))
                 {
                     var update = claudeMessage.ToAgentRunResponseUpdate();
                     if (update != null)
@@ -205,7 +195,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             {
                 List<ChatMessage> responseMessages = new();
                 // Receive and yield responses
-                await foreach (var claudeMessage in asyncEnumMsgs)
+                await foreach (var claudeMessage in asyncEnumMsgs.WithCancellation(cancellationToken))
                 {
                     var update = claudeMessage.ToAgentRunResponseUpdate();
                     if (update != null)
@@ -280,24 +270,39 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         ClaudeSdkClient? client = null;
         if (claudeThread == null)
         {
-            asyncEnumMsgs = ClaudeQuery.QueryAsync(content, options: _options.ToClaudeCodeOptions(), _logger);
+            asyncEnumMsgs = ClaudeQuery.QueryAsync(
+                content,
+                options: _options.ToClaudeCodeOptions(),
+                _logger,
+                cancellationToken
+            );
         }
         else
         {
-            client = await _clientManager.GetClientAsync(claudeThread, CancellationToken.None);
+            client = await _clientManager.GetClientAsync(claudeThread, cancellationToken);
 
             await client.QueryAsync(content,
                  sessionId: claudeThread.SessionId.ToString(),
-                 cancellationToken: CancellationToken.None);
+                 cancellationToken: cancellationToken);
 
-            asyncEnumMsgs = client.ReceiveResponseAsync(CancellationToken.None);
+            asyncEnumMsgs = client.ReceiveResponseAsync(cancellationToken);
+        }
+        return (asyncEnumMsgs, client);
+    }
+
+    private CancellationTokenRegistration RegisterInterrupt(
+        ClaudeSdkClient? client,
+        CancellationToken cancellationToken
+    )
+    {
+        if (client == null)
+        {
+            return default;
         }
 
-        // 
         var interruptRequested = 0;
-        using var cancellationRegistration = cancellationToken.Register(() =>
+        return cancellationToken.Register(() =>
         {
-            if (client == null) return;
             if (Interlocked.Exchange(ref interruptRequested, 1) != 0)
                 return;
 
@@ -309,13 +314,10 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogDebug(ex, "Failed to interrupt Claude SDK client during streaming cancellation");
+                    _logger?.LogDebug(ex, "Failed to interrupt Claude SDK client during cancellation");
                 }
             });
         });
-
-
-        return (asyncEnumMsgs, client);
     }
 
 
