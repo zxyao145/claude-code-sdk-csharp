@@ -30,8 +30,8 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build ./ClaudeCodeSdk.slnx -c Release --no-restore -p:PackageVersion=${{ steps.version.outputs.VERSION }}
-        dotnet pack ./ClaudeCodeSdk.slnx -o ./releases -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+        dotnet build ./claude-code-sdk-csharp.slnx -c Release --no-restore -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+        dotnet pack ./claude-code-sdk-csharp.slnx -o ./releases -c Release --no-build -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 
 
     # Get a short-lived NuGet API key
