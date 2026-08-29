@@ -278,16 +278,16 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         await foreach (var message in messages.WithCancellation(cancellationToken))
         {
             var mappedMessage = processor.Process(message);
-            yield return new MessageWithUpdates(
-                message,
-                includeMappedUpdates ? mappedMessage.Updates : []
-            );
-
             if (mappedMessage.CompletedHistoryBatch is { } completedBatch)
             {
                 await PersistStreamingBatchAsync(session, completedBatch, cancellationToken)
                     .ConfigureAwait(false);
             }
+
+            yield return new MessageWithUpdates(
+                message,
+                includeMappedUpdates ? mappedMessage.Updates : []
+            );
         }
 
         if (processor.CompleteRun() is { } finalBatch)

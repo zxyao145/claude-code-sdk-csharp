@@ -312,6 +312,55 @@ public class PartialMessageStreamingTests
     }
 
     [Fact]
+    public async Task ProcessNonStreamingMessagesAsync_ApiRetriesBeforeFailure_PersistOnceInOrder()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+
+        // Act
+        var response = await agent.ProcessNonStreamingMessagesAsync(
+            ToAsyncEnumerable([
+                ApiRetrySystemMessage(attempt: 1),
+                ApiRetrySystemMessage(attempt: 2),
+                ErrorResultMessage(),
+            ]),
+            session,
+            [request],
+            TestContext.Current.CancellationToken
+        );
+
+        // Assert
+        Assert.Equal(3, provider.Calls.Count);
+        Assert.Same(request, Assert.Single(provider.Calls[0].RequestMessages));
+        Assert.All(provider.Calls.Skip(1), call => Assert.Empty(call.RequestMessages));
+        Assert.All(
+            provider.Calls,
+            call =>
+                Assert.Contains(
+                    call.ResponseMessages.SelectMany(message => message.Contents),
+                    content => content is ErrorContent
+                )
+        );
+        Assert.Equal(
+            3,
+            response.Messages.Count(message => message.Contents.OfType<ErrorContent>().Any())
+        );
+        Assert.Equal(
+            ["api-retry-1", "api-retry-2", "error-result"],
+            provider
+                .Calls.SelectMany(call => call.ResponseMessages)
+                .Select(message => message.MessageId)
+        );
+    }
+
+    [Fact]
     public async Task ProcessNonStreamingMessagesAsync_WithoutHistoryProvider_ReturnsCompleteResponse()
     {
         // Arrange
@@ -408,6 +457,48 @@ public class PartialMessageStreamingTests
     }
 
     [Fact]
+    public async Task ProcessStreamingMessagesAsync_ApiRetry_PersistsBeforeYield()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+        var messageStream = new PausableMessageStream();
+        await using var enumerator = agent
+            .ProcessStreamingMessagesAsync(
+                messageStream.ReadAllAsync(TestContext.Current.CancellationToken),
+                session,
+                [request],
+                TestContext.Current.CancellationToken
+            )
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        messageStream.Emit(ApiRetrySystemMessage());
+
+        // Act
+        Assert.True(await enumerator.MoveNextAsync());
+
+        // Assert
+        var call = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(call.RequestMessages));
+        var retryMessage = Assert.Single(call.ResponseMessages);
+        Assert.Equal(ChatRole.System, retryMessage.Role);
+        Assert.Equal("api_retry", retryMessage.AdditionalProperties!["subtype"]?.ToString());
+        Assert.Contains(
+            "Claude Code API retry 1/10",
+            Assert.IsType<ErrorContent>(Assert.Single(retryMessage.Contents)).Message
+        );
+
+        messageStream.Complete();
+        Assert.False(await enumerator.MoveNextAsync());
+        Assert.Single(provider.Calls);
+    }
+
+    [Fact]
     public async Task ProcessStreamingMessagesAsync_InterruptedSecondRound_PersistsOnlyCompletedFirstRound()
     {
         // Arrange
@@ -462,7 +553,7 @@ public class PartialMessageStreamingTests
     }
 
     [Fact]
-    public async Task ProcessStreamingMessagesAsync_ErrorResultAfterTruncatedAssistant_DropsIncompleteRound()
+    public async Task ProcessStreamingMessagesAsync_ErrorResultAfterTruncatedAssistant_PersistsContextAndDropsIncompleteAssistant()
     {
         // Arrange
         var provider = new RecordingChatHistoryProvider();
@@ -496,13 +587,31 @@ public class PartialMessageStreamingTests
         );
 
         // Assert
-        var call = Assert.Single(provider.Calls);
+        Assert.Equal(2, provider.Calls.Count);
+        var completedCall = provider.Calls[0];
+        var failedCall = provider.Calls[1];
         Assert.Single(
-            call.ResponseMessages.SelectMany(message => message.Contents)
+            completedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
                 .OfType<FunctionCallContent>()
         );
+        Assert.Empty(failedCall.RequestMessages);
+        Assert.Single(
+            failedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
+                .OfType<FunctionResultContent>()
+        );
+        Assert.Contains(
+            failedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
+                .OfType<ErrorContent>(),
+            content => content.AdditionalProperties?["isFatalError"] is true
+        );
         Assert.DoesNotContain(
-            call.ResponseMessages.SelectMany(message => message.Contents).OfType<TextContent>(),
+            provider
+                .Calls.SelectMany(call => call.ResponseMessages)
+                .SelectMany(message => message.Contents)
+                .OfType<TextContent>(),
             content => content.Text.Contains("partial", StringComparison.Ordinal)
         );
         Assert.Contains(
@@ -723,6 +832,20 @@ public class PartialMessageStreamingTests
             NumTurns = 2,
             SessionId = "session-1",
             Result = "Request interrupted by user",
+        };
+
+    private static SystemMessage ApiRetrySystemMessage(int attempt = 1) =>
+        new()
+        {
+            Id = $"api-retry-{attempt}",
+            Subtype = "api_retry",
+            SessionId = "session-1",
+            Data = new Dictionary<string, object>
+            {
+                ["attempt"] = attempt,
+                ["max_retries"] = 10,
+                ["error"] = "rate_limit",
+            },
         };
 
     private static string MessageStart(

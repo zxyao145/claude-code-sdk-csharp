@@ -45,7 +45,11 @@ internal sealed class ClaudeStreamingMessageProcessor
         }
 
         ClaudeHistoryBatch? completedBatch = null;
-        if (
+        if (_historyAccumulator != null && ContainsSystemError(updates))
+        {
+            completedBatch = CreateBatch(_historyAccumulator.CompleteContext());
+        }
+        else if (
             _historyAccumulator != null
             && _mapper.TryConsumeCompletedMessageId(message, out var completedMessageId)
         )
@@ -66,6 +70,12 @@ internal sealed class ClaudeStreamingMessageProcessor
 
         return CreateBatch(_historyAccumulator.CompleteRun());
     }
+
+    private static bool ContainsSystemError(IEnumerable<AgentResponseUpdate> updates) =>
+        updates.Any(update =>
+            update.Role == ChatRole.System
+            && update.Contents.Any(content => content is ErrorContent)
+        );
 
     private ClaudeHistoryBatch? CreateBatch(IReadOnlyList<AgentResponseUpdate> updates)
     {

@@ -53,6 +53,13 @@ internal sealed class ClaudeStreamingHistoryAccumulator
         return Order(completedUpdates);
     }
 
+    public IReadOnlyList<AgentResponseUpdate> CompleteContext()
+    {
+        var completedUpdates = Order(_contextUpdates);
+        _contextUpdates.Clear();
+        return completedUpdates;
+    }
+
     public IReadOnlyList<AgentResponseUpdate> CompleteRun()
     {
         var completedUpdates = new List<SequencedUpdate>(_contextUpdates);

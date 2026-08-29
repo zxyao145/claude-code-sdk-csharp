@@ -176,8 +176,8 @@ foreach (var message in response.Messages)
 At runtime:
 
 - `InvokingAsync(...)` runs **before** the request is sent. Claude Code resumes model history through its provider session ID, so stored messages are not resent as prompt input.
-- `InvokedAsync(...)` receives only new request messages plus completed response messages. With partial messages enabled, it can run multiple times during one agent run—once for each safely completed Assistant message and once for any final remainder.
-- Streaming updates are yielded immediately. A message becomes persistable only after both `message_stop` and its complete `AssistantMessage` arrive, then its updates are combined with `ToAgentResponse()`. Earlier completed Tool Use rounds remain stored if a later round is interrupted; the incomplete round is discarded.
+- `InvokedAsync(...)` receives only new request messages plus completed response messages. With partial messages enabled, it can run multiple times during one agent run—once for each safely completed Assistant message, whenever a System error flushes completed context, and once for any final remainder.
+- Assistant messages become persistable only after both `message_stop` and their complete `AssistantMessage` arrive. System errors such as `api_retry` and failed results flush accumulated Tool/User/System context before the error update is yielded. Earlier completed rounds and diagnostics remain stored if a later round fails; incomplete Assistant content is discarded.
 - `RunAsync(...)` and `RunStreamingAsync(...)` use the same completion and persistence state machine.
 - Without partial events, history keeps the compatible end-of-run aggregation fallback.
 
@@ -423,8 +423,7 @@ sequenceDiagram
 ### Streaming Pipeline
 
 `RunStreamingAsync` yields `AgentResponseUpdate`s as they arrive. The processor feeds every
-`IMessage` through the mapper, yields the updates immediately, and persists a history batch only
-once a message is complete.
+`IMessage` through the mapper and persists any safe history batch before yielding its updates.
 
 ```mermaid
 sequenceDiagram
@@ -442,9 +441,9 @@ sequenceDiagram
         Agent->>Proc: Process(message)
         Proc->>Map: Map(message) -> AgentResponseUpdate[]
         Proc->>Acc: Add(updates)
-        Agent-->>App: yield each AgentResponseUpdate
         Proc->>Proc: TryConsumeCompletedMessageId -> CompleteAssistantMessage
         Agent->>Agent: PersistStreamingBatch (InvokedAsync)
+        Agent-->>App: yield each AgentResponseUpdate
     end
     Proc->>Proc: CompleteRun() -> final batch
     Agent->>Agent: PersistStreamingBatch (InvokedAsync)
@@ -505,8 +504,12 @@ sequenceDiagram
 
     Agent->>Proc: Process(message)
     Proc->>Acc: Add(updates)
-    Proc->>Proc: TryConsumeCompletedMessageId
-    alt message_stop AND AssistantMessage both arrived
+    alt current update contains a System error
+        Proc->>Acc: CompleteContext()
+        Proc-->>Agent: ClaudeHistoryBatch
+        Agent->>Prov: InvokedAsync(request + completed context)
+    else message_stop AND AssistantMessage both arrived
+        Proc->>Proc: TryConsumeCompletedMessageId
         Proc->>Acc: CompleteAssistantMessage(id)
         Proc-->>Agent: ClaudeHistoryBatch
         Agent->>Prov: InvokedAsync(request + completed response)
@@ -541,7 +544,7 @@ The integration automatically converts between Claude Code content blocks and MA
 - Session IDs are generated when creating/deserializing `ClaudeCodeAgentSession`
 - Multi-turn conversations use the session ID passed to `ClaudeSdkClient.QueryAsync(...)`
 - AgentSession can be serialized/deserialized with their session ID preserved
-- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run and may call the invoked hook after each completed Assistant message; Claude Code resumes model history by session ID, while the provider stores staged application history
+- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run and may call the invoked hook after each completed Assistant message or System error boundary; Claude Code resumes model history by session ID, while the provider stores staged application history
 
 ### Connection Lifecycle
 - Non-session calls use one-shot `ClaudeQuery.QueryAsync(...)`
