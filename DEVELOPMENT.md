@@ -33,7 +33,7 @@ claude-code-sdk-csharp/
 │       └── ClaudeStreaming*.cs     # Partial-message and history pipeline
 ├── tests/                          # xUnit v3 test project
 ├── examples/                       # Console examples for both packages
-├── ClaudeCodeSdk.slnx
+├── claude-code-sdk-csharp.slnx
 ├── Directory.Build.props           # Shared target framework and package metadata
 └── Directory.Packages.props        # Central package versions
 ```
@@ -43,10 +43,10 @@ claude-code-sdk-csharp/
 ```bash
 # Restore and build all projects
 dotnet restore
-dotnet build ClaudeCodeSdk.slnx
+dotnet build claude-code-sdk-csharp.slnx
 
 # Run the full test suite
-dotnet test ClaudeCodeSdk.slnx
+dotnet test claude-code-sdk-csharp.slnx
 
 # Run one test class
 dotnet test --filter "FullyQualifiedName~PartialMessageStreamingTests"
