@@ -1,9 +1,9 @@
+using ClaudeCodeSdk.Utils;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using ClaudeCodeSdk.Utils;
-using Microsoft.Extensions.Logging;
 
 namespace ClaudeCodeSdk;
 
@@ -186,33 +186,33 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         switch (prompt)
         {
             case string stringPrompt:
-            {
-                var message = new Dictionary<string, object>
                 {
-                    ["type"] = "user",
-                    ["message"] = new Dictionary<string, object>
+                    var message = new Dictionary<string, object>
                     {
-                        ["role"] = "user",
-                        ["content"] = stringPrompt,
-                    },
-                    ["parent_tool_use_id"] = null!,
-                    ["session_id"] = "default",
-                };
+                        ["type"] = "user",
+                        ["message"] = new Dictionary<string, object>
+                        {
+                            ["role"] = "user",
+                            ["content"] = stringPrompt,
+                        },
+                        ["parent_tool_use_id"] = null!,
+                        ["session_id"] = "default",
+                    };
 
-                var json = JsonUtil.Serialize(message);
-                await WriteLineAsync(json, cancellationToken);
-                break;
-            }
-
-            case IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable:
-            {
-                await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
-                {
                     var json = JsonUtil.Serialize(message);
                     await WriteLineAsync(json, cancellationToken);
+                    break;
                 }
-                break;
-            }
+
+            case IAsyncEnumerable<Dictionary<string, object>> asyncEnumerable:
+                {
+                    await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
+                    {
+                        var json = JsonUtil.Serialize(message);
+                        await WriteLineAsync(json, cancellationToken);
+                    }
+                    break;
+                }
         }
     }
 

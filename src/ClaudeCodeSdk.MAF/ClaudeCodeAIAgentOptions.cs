@@ -1,6 +1,6 @@
-﻿using System.Text.Json.Serialization;
-using ClaudeCodeSdk.Types;
+﻿using ClaudeCodeSdk.Types;
 using Microsoft.Agents.AI;
+using System.Text.Json.Serialization;
 
 namespace ClaudeCodeSdk.MAF;
 

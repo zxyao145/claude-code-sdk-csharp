@@ -1,7 +1,7 @@
-using System.Text.Json;
 using ClaudeCodeSdk.MAF;
 using ClaudeCodeSdk.Types;
 using Microsoft.Extensions.AI;
+using System.Text.Json;
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;

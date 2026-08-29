@@ -1,6 +1,6 @@
+using Microsoft.Agents.AI;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
-using Microsoft.Agents.AI;
 
 namespace ClaudeCodeSdk.MAF;
 

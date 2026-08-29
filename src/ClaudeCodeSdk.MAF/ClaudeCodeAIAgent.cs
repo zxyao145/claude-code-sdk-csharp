@@ -1,11 +1,11 @@
-﻿using System.Runtime.CompilerServices;
-using System.Text.Json;
-using ClaudeCodeSdk.MAF.Utils;
+﻿using ClaudeCodeSdk.MAF.Utils;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace ClaudeCodeSdk.MAF;
 
