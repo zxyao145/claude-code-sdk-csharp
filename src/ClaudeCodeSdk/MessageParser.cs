@@ -39,7 +39,7 @@ internal static class MessageParser
         return ParseMessage(jsonLineElement, logger);
     }
 
-    private static IMessage ParseMessage(JsonElement jsonLine, ILogger? logger = null)
+    private static IMessage? ParseMessage(JsonElement jsonLine, ILogger? logger = null)
     {
         if (jsonLine.ValueKind != JsonValueKind.Object)
         {
@@ -67,8 +67,26 @@ internal static class MessageParser
             "user" => ParseUserMessage(jsonLine),
             "result" => ParseResultMessage(jsonLine),
             "stream_event" => ParseStreamEvent(jsonLine),
-            _ => throw new MessageParseException($"Unknown message type: {messageType}", jsonLine),
+            // Forward compatibility: the CLI emits message types that a given SDK version
+            // predates (e.g. "rate_limit_event"). Returning null skips the message instead of
+            // tearing down the caller's receive loop; ClaudeProcess.ReceiveAsync already treats
+            // null as "skip this line".
+            _ => LogAndSkipUnknownMessageType(messageType, jsonLine, logger),
         };
+    }
+
+    private static IMessage? LogAndSkipUnknownMessageType(
+        string messageType,
+        JsonElement jsonLine,
+        ILogger? logger
+    )
+    {
+        logger?.LogDebug(
+            "Skipping unknown message type '{MessageType}': {Payload}",
+            messageType,
+            jsonLine.GetRawText()
+        );
+        return null;
     }
 
     private static UserMessage ParseUserMessage(JsonElement msgData)
