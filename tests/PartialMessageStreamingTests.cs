@@ -312,6 +312,49 @@ public class PartialMessageStreamingTests
     }
 
     [Fact]
+    public async Task ProcessNonStreamingMessagesAsync_ApiRetriesBeforeFailure_PersistOnceInOrder()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+
+        // Act
+        var response = await agent.ProcessNonStreamingMessagesAsync(
+            ToAsyncEnumerable([
+                ApiRetrySystemMessage(attempt: 1),
+                ApiRetrySystemMessage(attempt: 2),
+                SyntheticRateLimitAssistantMessage(),
+                ErrorResultMessage(),
+            ]),
+            session,
+            [request],
+            TestContext.Current.CancellationToken
+        );
+
+        // Assert
+        var call = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(call.RequestMessages));
+        Assert.Equal(
+            4,
+            response.Messages.Count(message => message.Contents.OfType<ErrorContent>().Any())
+        );
+        Assert.Equal(
+            ["api-retry-1", "api-retry-2", "synthetic-rate-limit", "error-result"],
+            call.ResponseMessages.Select(message => message.MessageId)
+        );
+        Assert.All(
+            call.ResponseMessages,
+            message => Assert.Contains(message.Contents, content => content is ErrorContent)
+        );
+    }
+
+    [Fact]
     public async Task ProcessNonStreamingMessagesAsync_WithoutHistoryProvider_ReturnsCompleteResponse()
     {
         // Arrange
@@ -408,7 +451,100 @@ public class PartialMessageStreamingTests
     }
 
     [Fact]
-    public async Task ProcessStreamingMessagesAsync_InterruptedSecondRound_PersistsOnlyCompletedFirstRound()
+    public async Task ProcessStreamingMessagesAsync_ApiRetry_PersistsAtRunEnd()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+        var messageStream = new PausableMessageStream();
+        await using var enumerator = agent
+            .ProcessStreamingMessagesAsync(
+                messageStream.ReadAllAsync(TestContext.Current.CancellationToken),
+                session,
+                [request],
+                TestContext.Current.CancellationToken
+            )
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        messageStream.Emit(ApiRetrySystemMessage());
+
+        // Act
+        Assert.True(await enumerator.MoveNextAsync());
+
+        // Assert
+        Assert.Empty(provider.Calls);
+        messageStream.Complete();
+        Assert.False(await enumerator.MoveNextAsync());
+
+        var call = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(call.RequestMessages));
+        var retryMessage = Assert.Single(call.ResponseMessages);
+        Assert.Equal(ChatRole.System, retryMessage.Role);
+        Assert.Equal("api_retry", retryMessage.AdditionalProperties!["subtype"]?.ToString());
+        Assert.Contains(
+            "Claude Code API retry 1/10",
+            Assert.IsType<ErrorContent>(Assert.Single(retryMessage.Contents)).Message
+        );
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_SyntheticError_PersistsRemainderAtRunEnd()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+        var messageStream = new PausableMessageStream();
+        await using var enumerator = agent
+            .ProcessStreamingMessagesAsync(
+                messageStream.ReadAllAsync(TestContext.Current.CancellationToken),
+                session,
+                [request],
+                TestContext.Current.CancellationToken
+            )
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        messageStream.Emit(ToolResultMessage());
+        messageStream.Emit(SyntheticRateLimitAssistantMessage());
+
+        // Act
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Empty(provider.Calls);
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Empty(provider.Calls);
+        messageStream.Emit(ErrorResultMessage());
+        messageStream.Complete();
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Empty(provider.Calls);
+        Assert.False(await enumerator.MoveNextAsync());
+
+        // Assert
+        var finalCall = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(finalCall.RequestMessages));
+        Assert.Equal(
+            ["tool-result-1", "synthetic-rate-limit", "error-result"],
+            finalCall.ResponseMessages.Select(message => message.MessageId)
+        );
+        var rateLimit = finalCall.ResponseMessages[1];
+        Assert.Equal(ChatRole.Assistant, rateLimit.Role);
+        Assert.Equal("<synthetic>", rateLimit.AuthorName);
+        Assert.Equal(
+            "rate_limit",
+            Assert.IsType<ErrorContent>(Assert.Single(rateLimit.Contents)).Message
+        );
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_InterruptedSecondRound_PersistsEntireRemainder()
     {
         // Arrange
         var provider = new RecordingChatHistoryProvider();
@@ -446,14 +582,24 @@ public class PartialMessageStreamingTests
         });
 
         // Assert
-        var call = Assert.Single(provider.Calls);
+        Assert.Equal(2, provider.Calls.Count);
+        var completedCall = provider.Calls[0];
+        var finalCall = provider.Calls[1];
         Assert.Single(
-            call.ResponseMessages.SelectMany(message => message.Contents)
+            completedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
                 .OfType<FunctionCallContent>()
         );
-        Assert.DoesNotContain(
-            call.ResponseMessages.SelectMany(message => message.Contents).OfType<TextContent>(),
-            content => content.Text.Contains("partial", StringComparison.Ordinal)
+        Assert.Single(
+            finalCall
+                .ResponseMessages.SelectMany(message => message.Contents)
+                .OfType<FunctionResultContent>()
+        );
+        Assert.Contains(
+            finalCall
+                .ResponseMessages.SelectMany(message => message.Contents)
+                .OfType<TextContent>(),
+            content => content.Text == "partial"
         );
         Assert.Contains(
             updates.SelectMany(update => update.Contents).OfType<TextContent>(),
@@ -462,7 +608,232 @@ public class PartialMessageStreamingTests
     }
 
     [Fact]
-    public async Task ProcessStreamingMessagesAsync_ErrorResultAfterTruncatedAssistant_DropsIncompleteRound()
+    public async Task ProcessStreamingMessagesAsync_SourceFailure_PersistsRemainderAndPreservesFailure()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (
+                var _ in agent.ProcessStreamingMessagesAsync(
+                    ToFailingAsyncEnumerable(
+                        PartialAnswerMessages(),
+                        new InvalidOperationException("stream failure")
+                    ),
+                    session,
+                    [request],
+                    TestContext.Current.CancellationToken
+                )
+            ) { }
+        });
+
+        // Assert
+        Assert.Equal("stream failure", exception.Message);
+        var call = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(call.RequestMessages));
+        Assert.Contains(
+            call.ResponseMessages.SelectMany(message => message.Contents).OfType<TextContent>(),
+            content => content.Text == "partial"
+        );
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_Cancellation_PersistsRemainderAndPreservesCancellation()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+        using var cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken
+        );
+        var messageStream = new PausableMessageStream();
+        await using var enumerator = agent
+            .ProcessStreamingMessagesAsync(
+                messageStream.ReadAllAsync(cancellationSource.Token),
+                session,
+                [request],
+                cancellationSource.Token
+            )
+            .GetAsyncEnumerator(cancellationSource.Token);
+        foreach (var message in PartialAnswerMessages())
+        {
+            messageStream.Emit(message);
+        }
+        Assert.True(await enumerator.MoveNextAsync());
+
+        // Act
+        cancellationSource.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            enumerator.MoveNextAsync().AsTask()
+        );
+
+        // Assert
+        var call = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(call.RequestMessages));
+        Assert.Contains(
+            call.ResponseMessages.SelectMany(message => message.Contents).OfType<TextContent>(),
+            content => content.Text == "partial"
+        );
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_ConsumerDisposes_PersistsRemainder()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider();
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var request = new ChatMessage(ChatRole.User, "request");
+        var messageStream = new PausableMessageStream();
+        var enumerator = agent
+            .ProcessStreamingMessagesAsync(
+                messageStream.ReadAllAsync(TestContext.Current.CancellationToken),
+                session,
+                [request],
+                TestContext.Current.CancellationToken
+            )
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        foreach (var message in PartialAnswerMessages())
+        {
+            messageStream.Emit(message);
+        }
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Empty(provider.Calls);
+
+        // Act
+        await enumerator.DisposeAsync();
+
+        // Assert
+        var call = Assert.Single(provider.Calls);
+        Assert.Same(request, Assert.Single(call.RequestMessages));
+        Assert.Contains(
+            call.ResponseMessages.SelectMany(message => message.Contents).OfType<TextContent>(),
+            content => content.Text == "partial"
+        );
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_ConsumerDisposesAndPersistenceFails_PropagatesFailure()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider { FailureCallNumber = 1 };
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+        var messageStream = new PausableMessageStream();
+        var enumerator = agent
+            .ProcessStreamingMessagesAsync(
+                messageStream.ReadAllAsync(TestContext.Current.CancellationToken),
+                session,
+                [new ChatMessage(ChatRole.User, "request")],
+                TestContext.Current.CancellationToken
+            )
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        foreach (var message in PartialAnswerMessages())
+        {
+            messageStream.Emit(message);
+        }
+        Assert.True(await enumerator.MoveNextAsync());
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            enumerator.DisposeAsync().AsTask()
+        );
+
+        // Assert
+        Assert.Equal("history persistence failure", exception.Message);
+        Assert.Equal(1, provider.AttemptCount);
+        Assert.Empty(provider.Calls);
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_SourceAndFinalPersistenceFail_PreservesSourceFailure()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider { FailureCallNumber = 1 };
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (
+                var _ in agent.ProcessStreamingMessagesAsync(
+                    ToFailingAsyncEnumerable(
+                        PartialAnswerMessages(),
+                        new InvalidOperationException("stream failure")
+                    ),
+                    session,
+                    [new ChatMessage(ChatRole.User, "request")],
+                    TestContext.Current.CancellationToken
+                )
+            ) { }
+        });
+
+        // Assert
+        Assert.Equal("stream failure", exception.Message);
+        Assert.Equal(1, provider.AttemptCount);
+        Assert.Empty(provider.Calls);
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_FinalPersistenceFailsWithoutSourceFailure_PropagatesFailure()
+    {
+        // Arrange
+        var provider = new RecordingChatHistoryProvider { FailureCallNumber = 1 };
+        using var agent = new ClaudeCodeAIAgent(
+            new ClaudeCodeAIAgentOptions { ChatHistoryProvider = provider }
+        );
+        var session = Assert.IsType<ClaudeCodeAgentSession>(
+            await agent.CreateSessionAsync(TestContext.Current.CancellationToken)
+        );
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CollectAsync(
+                agent.ProcessStreamingMessagesAsync(
+                    ToAsyncEnumerable(PartialAnswerMessages()),
+                    session,
+                    [new ChatMessage(ChatRole.User, "request")],
+                    TestContext.Current.CancellationToken
+                )
+            )
+        );
+
+        // Assert
+        Assert.Equal("history persistence failure", exception.Message);
+        Assert.Equal(1, provider.AttemptCount);
+        Assert.Empty(provider.Calls);
+    }
+
+    [Fact]
+    public async Task ProcessStreamingMessagesAsync_ErrorResultAfterTruncatedAssistant_PersistsEntireRemainder()
     {
         // Arrange
         var provider = new RecordingChatHistoryProvider();
@@ -496,14 +867,32 @@ public class PartialMessageStreamingTests
         );
 
         // Assert
-        var call = Assert.Single(provider.Calls);
+        Assert.Equal(2, provider.Calls.Count);
+        var completedCall = provider.Calls[0];
+        var failedCall = provider.Calls[1];
         Assert.Single(
-            call.ResponseMessages.SelectMany(message => message.Contents)
+            completedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
                 .OfType<FunctionCallContent>()
         );
-        Assert.DoesNotContain(
-            call.ResponseMessages.SelectMany(message => message.Contents).OfType<TextContent>(),
-            content => content.Text.Contains("partial", StringComparison.Ordinal)
+        Assert.Empty(failedCall.RequestMessages);
+        Assert.Single(
+            failedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
+                .OfType<FunctionResultContent>()
+        );
+        Assert.Contains(
+            failedCall
+                .ResponseMessages.SelectMany(message => message.Contents)
+                .OfType<ErrorContent>(),
+            content => content.AdditionalProperties?["isFatalError"] is true
+        );
+        Assert.Contains(
+            provider
+                .Calls.SelectMany(call => call.ResponseMessages)
+                .SelectMany(message => message.Contents)
+                .OfType<TextContent>(),
+            content => content.Text == "partial"
         );
         Assert.Contains(
             updates.SelectMany(update => update.Contents),
@@ -663,6 +1052,12 @@ public class PartialMessageStreamingTests
             AssistantTextMessage("answer-wrapper", "message-2", "done"),
         ];
 
+    private static IReadOnlyList<IMessage> PartialAnswerMessages() =>
+        [
+            ParseStreamEvent(MessageStart("partial-start", "partial-message", "claude-sonnet")),
+            ParseStreamEvent(ContentBlockDelta("partial-text", 0, "text_delta", "text", "partial")),
+        ];
+
     private static AssistantMessage AssistantToolMessage(
         string wrapperId,
         string? messageId,
@@ -723,6 +1118,29 @@ public class PartialMessageStreamingTests
             NumTurns = 2,
             SessionId = "session-1",
             Result = "Request interrupted by user",
+        };
+
+    private static AssistantMessage SyntheticRateLimitAssistantMessage() =>
+        new()
+        {
+            Id = "synthetic-rate-limit",
+            Model = "<synthetic>",
+            SessionId = "session-1",
+            Content = [new ErrorContentBlock("rate_limit")],
+        };
+
+    private static SystemMessage ApiRetrySystemMessage(int attempt = 1) =>
+        new()
+        {
+            Id = $"api-retry-{attempt}",
+            Subtype = "api_retry",
+            SessionId = "session-1",
+            Data = new Dictionary<string, object>
+            {
+                ["attempt"] = attempt,
+                ["max_retries"] = 10,
+                ["error"] = "rate_limit",
+            },
         };
 
     private static string MessageStart(
@@ -846,6 +1264,20 @@ public class PartialMessageStreamingTests
         throw new OperationCanceledException("simulated interruption");
     }
 
+    private static async IAsyncEnumerable<IMessage> ToFailingAsyncEnumerable(
+        IEnumerable<IMessage> messages,
+        Exception exception
+    )
+    {
+        foreach (var message in messages)
+        {
+            await Task.Yield();
+            yield return message;
+        }
+
+        throw exception;
+    }
+
     private static async Task<List<AgentResponseUpdate>> CollectAsync(
         IAsyncEnumerable<AgentResponseUpdate> updates
     )
@@ -865,6 +1297,10 @@ public class PartialMessageStreamingTests
 
         public List<HistoryCall> Calls { get; } = [];
 
+        public int? FailureCallNumber { get; init; }
+
+        public int AttemptCount { get; private set; }
+
         public async Task WaitForCallCountAsync(int count, CancellationToken cancellationToken)
         {
             while (Calls.Count < count)
@@ -878,6 +1314,12 @@ public class PartialMessageStreamingTests
             CancellationToken cancellationToken = default
         )
         {
+            AttemptCount++;
+            if (AttemptCount == FailureCallNumber)
+            {
+                throw new InvalidOperationException("history persistence failure");
+            }
+
             Calls.Add(
                 new HistoryCall(
                     context.RequestMessages.ToList(),

@@ -274,26 +274,61 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
             enableHistoryPersistence,
             enableMessageMapping: includeMappedUpdates
         );
-
-        await foreach (var message in messages.WithCancellation(cancellationToken))
+        Exception? processingFailure = null;
+        await using var enumerator = messages
+            .WithCancellation(cancellationToken)
+            .GetAsyncEnumerator();
+        try
         {
-            var mappedMessage = processor.Process(message);
-            yield return new MessageWithUpdates(
-                message,
-                includeMappedUpdates ? mappedMessage.Updates : []
-            );
-
-            if (mappedMessage.CompletedHistoryBatch is { } completedBatch)
+            while (true)
             {
-                await PersistStreamingBatchAsync(session, completedBatch, cancellationToken)
-                    .ConfigureAwait(false);
+                MessageWithUpdates processedMessage;
+                try
+                {
+                    if (!await enumerator.MoveNextAsync())
+                    {
+                        break;
+                    }
+
+                    var message = enumerator.Current;
+                    var mappedMessage = processor.Process(message);
+                    if (mappedMessage.CompletedHistoryBatch is { } completedBatch)
+                    {
+                        await PersistStreamingBatchAsync(session, completedBatch, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+
+                    processedMessage = new MessageWithUpdates(
+                        message,
+                        includeMappedUpdates ? mappedMessage.Updates : []
+                    );
+                }
+                catch (Exception exception)
+                {
+                    processingFailure = exception;
+                    throw;
+                }
+
+                yield return processedMessage;
             }
         }
-
-        if (processor.CompleteRun() is { } finalBatch)
+        finally
         {
-            await PersistStreamingBatchAsync(session, finalBatch, cancellationToken)
-                .ConfigureAwait(false);
+            try
+            {
+                if (processor.CompleteRun() is { } finalBatch)
+                {
+                    await PersistStreamingBatchAsync(session, finalBatch, CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+            }
+            catch (Exception persistenceException) when (processingFailure != null)
+            {
+                _logger?.LogError(
+                    persistenceException,
+                    "Claude Code history persistence failed while preserving a message stream failure."
+                );
+            }
         }
     }
 
