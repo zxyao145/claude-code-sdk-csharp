@@ -1,9 +1,9 @@
-using System.Text;
-using System.Text.Json;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.Text;
+using System.Text.Json;
 
 namespace ClaudeCodeSdk.MAF;
 

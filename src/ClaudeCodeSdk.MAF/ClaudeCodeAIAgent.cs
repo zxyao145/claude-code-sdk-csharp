@@ -1,11 +1,11 @@
-﻿using System.Runtime.CompilerServices;
-using System.Text.Json;
-using ClaudeCodeSdk.MAF.Utils;
+﻿using ClaudeCodeSdk.MAF.Utils;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -24,7 +24,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         : this(new ClaudeCodeAIAgentOptions(), null) { }
 
     /// <summary>
-    /// ClaudeCodeOptions.Resume will not working. Please replace with AgentSession
+    /// ClaudeCodeOptions.Resume is not used by the MAF adapter. Pass an AgentSession to preserve conversation continuity.
     /// </summary>
     /// <param name="options"></param>
     /// <param name="logger"></param>

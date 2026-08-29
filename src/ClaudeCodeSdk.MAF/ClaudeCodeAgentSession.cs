@@ -1,7 +1,6 @@
+using Microsoft.Agents.AI;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
-using ClaudeCodeSdk.Types;
-using Microsoft.Agents.AI;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -15,8 +14,8 @@ public sealed class ClaudeCodeAgentSession : AgentSession
     /// Gets the session ID for the Claude Code conversation.
     /// </summary>
     /// <remarks>
-    /// This property is set automatically when receiving the first <see cref="SystemMessage"/>
-    /// from Claude Code that contains a session ID.
+    /// This property is generated when a new session is created or restored from serialized state.
+    /// It is sent to Claude Code as the user message's session ID.
     /// </remarks>
     [JsonPropertyName("sessionId")]
     public Guid SessionId { get; internal set; }

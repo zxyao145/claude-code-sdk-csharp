@@ -1,8 +1,8 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace ClaudeCodeSdk;
 

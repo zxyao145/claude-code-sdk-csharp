@@ -1,10 +1,10 @@
-using System.Text.Json;
-using System.Threading.Channels;
 using ClaudeCodeSdk.MAF;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.Text.Json;
+using System.Threading.Channels;
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;

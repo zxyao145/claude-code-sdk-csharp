@@ -175,7 +175,7 @@ foreach (var message in response.Messages)
 
 At runtime:
 
-- `InvokingAsync(...)` runs **before** the request is sent. Claude Code resumes model history through its provider session ID, so stored messages are not resent as prompt input.
+- `InvokingAsync(...)` runs **before** the request is sent. Claude Code resumes model history through the supplied `AgentSession` ID, so stored messages are not resent as prompt input.
 - `InvokedAsync(...)` receives only new request messages plus response messages. With partial messages enabled, it can run multiple times during one agent run—once for each safely completed Assistant message and once for the final remainder on every exit path.
 - Assistant messages that receive both `message_stop` and their complete `AssistantMessage` are persisted incrementally. On normal completion, failure, cancellation, source exception, or early consumer disposal, every remaining buffered update is persisted in original order, including incomplete Assistant text and tool fragments.
 - The final persistence attempt ignores the run cancellation token. If the stream and final persistence both fail, the stream failure remains primary; otherwise the persistence failure is propagated.
@@ -221,7 +221,7 @@ var options = new ClaudeCodeAIAgentOptions
 {
     MaxThinkingTokens = 10000,
     SystemPrompt = "You are an expert C# developer.",
-    Model = "claude-sonnet-4-5",
+    Model = "sonnet",
     PermissionMode = PermissionMode.acceptEdits,
     ApiKey = "your-api-key" // Or set ANTHROPIC_AUTH_TOKEN environment variable
 };
@@ -363,7 +363,7 @@ Main class implementing `AIAgent` from Microsoft.Agents.AI:
 
 Internal session implementation that:
 - Maintains session ID for conversation continuity
-- Automatically captures session ID from first system message
+- Generates an ID when a session is created or restores the ID from serialized state
 - Supports serialization for persistence (stores session ID)
 
 ### ClaudeCodeAIAgentOptions
@@ -376,17 +376,16 @@ Configuration options wrapper that extends ClaudeCodeOptions:
 | `IncludePartialMessages` | Emit token-level `AgentResponseUpdate` chunks (`false` by default) |
 | `SystemPrompt` | Custom system prompt |
 | `AppendSystemPrompt` | Additional system prompt to append |
-| `Model` | Claude model to use (e.g., "claude-sonnet-4-5") |
+| `Model` | Claude Code model alias or full model name (for example, `sonnet`) |
 | `PermissionMode` | Tool permission mode (`@default`, `acceptEdits`, `plan`, `bypassPermissions`) |
 | `CanUseTool` | Async callback for permission requests and `AskUserQuestion` user input |
 | `AllowedTools` | List of allowed tools |
 | `DisallowedTools` | List of disallowed tools |
 | `McpServers` | MCP server configurations |
-| `McpServersPath` | Path to MCP servers configuration file |
 | `MaxTurns` | Maximum conversation turns |
 | `WorkingDirectory` | Working directory for Claude Code CLI |
 | `Settings` | Path to settings file |
-| `AddDirectories` | Additional directories to include |
+| `AddDirs` | Additional directories passed to Claude Code with `--add-dir` |
 | `ApiKey` | Anthropic API key (overrides ANTHROPIC_AUTH_TOKEN) |
 | `BaseUrl` | Custom API endpoint (overrides ANTHROPIC_BASE_URL) |
 | `EnvironmentVariables` | Additional environment variables |
@@ -496,8 +495,8 @@ flowchart LR
 ### History Persistence
 
 When `ChatHistoryProvider` is configured, `InvokingAsync` runs before the request (Claude Code
-resumes model history by session ID, so stored messages are not resent). `InvokedAsync` then
-fires with each safely-completed assistant message plus a final remainder at end of run.
+resumes model history through the supplied `AgentSession` ID, so stored messages are not resent). `InvokedAsync` then
+fires with each safely-completed assistant message plus a final remainder whenever the run exits.
 
 ```mermaid
 sequenceDiagram
@@ -536,7 +535,7 @@ The integration automatically converts between Claude Code content blocks and MA
 ## Key Behaviors
 
 ### System Message Handling
-- Current implementation forwards only user-message text to Claude Code
+- Prompt construction uses the first user message and forwards its text and image `DataContent`
 - Per-request `ChatRole.System` messages are currently ignored during request construction
 
 ### Session Management
@@ -544,7 +543,7 @@ The integration automatically converts between Claude Code content blocks and MA
 - Session IDs are generated when creating/deserializing `ClaudeCodeAgentSession`
 - Multi-turn conversations use the session ID passed to `ClaudeSdkClient.QueryAsync(...)`
 - AgentSession can be serialized/deserialized with their session ID preserved
-- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run, may call the invoked hook after each completed Assistant message, and always drains any remaining buffered updates when the run exits; Claude Code resumes model history by session ID, while the provider stores staged application history
+- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run, may call the invoked hook after each completed Assistant message, and always drains any remaining buffered updates when the run exits; Claude Code resumes model history through the supplied `AgentSession` ID, while the provider stores staged application history
 
 ### Connection Lifecycle
 - Non-session calls use one-shot `ClaudeQuery.QueryAsync(...)`
@@ -553,8 +552,8 @@ The integration automatically converts between Claude Code content blocks and MA
 
 ### Message Processing
 - **RunAsync()** - Collects all messages until `ResultMessage` and returns complete response
-- **RunStreamingAsync()** - Yields `AgentRunResponseUpdate` for each message received
-- Only user-message text is sent to Claude Code
+- **RunStreamingAsync()** - Yields `AgentResponseUpdate` chunks as content arrives
+- Request content comes from the first user message; text and image `DataContent` are supported
 
 ## Important Notes
 

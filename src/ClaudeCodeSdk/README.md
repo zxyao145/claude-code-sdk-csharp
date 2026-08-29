@@ -6,8 +6,10 @@ A .NET SDK for interacting with Claude through the Claude Code CLI. This core pa
 
 - **Dual-Pattern Architecture**: Choose between one-shot queries (`ClaudeQuery`) or interactive sessions (`ClaudeSdkClient`)
 - **Streaming Responses**: Real-time message streaming with `IAsyncEnumerable<T>`
+- **Partial Messages**: Optional token-level events through `IncludePartialMessages`
 - **Type-Safe Messaging**: Strongly-typed message and content block interfaces
 - **Tool Integration**: Full support for Claude Code's built-in tools (Read, Write, Bash, Grep, etc.)
+- **Human Input Callbacks**: Handle permissions and `AskUserQuestion` through `CanUseTool`
 - **Session Management**: Multi-turn conversations with resumption support
 - **MCP Servers**: Configure Model Context Protocol servers for extended capabilities
 - **Resource Management**: Automatic cleanup with `IAsyncDisposable` pattern
@@ -23,7 +25,7 @@ dotnet add package ClaudeCodeSdk
 
 ## Prerequisites
 
-- .NET 10.0 SDK (supports .NET 8.0+ for compatibility)
+- .NET 10.0 SDK
 - Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
 - Anthropic API key (set via environment variable or options)
 
@@ -147,6 +149,7 @@ All messages implement `IMessage`:
 - **`UserMessage`** - User input messages
 - **`SystemMessage`** - System notifications and metadata
 - **`ResultMessage`** - End-of-conversation marker with usage statistics
+- **`StreamEvent`** - Raw partial-message event emitted when `IncludePartialMessages` is enabled
 
 ```csharp
 await foreach (var message in ClaudeQuery.QueryAsync("Hello"))
@@ -230,10 +233,11 @@ var options = new ClaudeCodeOptions
     BaseUrl = "https://api.anthropic.com",  // Custom API endpoint (optional)
 
     // Model configuration
-    Model = "claude-sonnet-4-5",
+    Model = "sonnet",
     SystemPrompt = "You are a helpful assistant.",
     MaxTurns = 10,
     MaxThinkingTokens = 4096,
+    IncludePartialMessages = true,
 
     // Tools and permissions
     AllowedTools = new[] { "Read", "Write", "Bash", "Grep" },
@@ -861,17 +865,16 @@ dotnet test
 # With verbose output
 dotnet test --verbosity normal
 
-# Specific test
-dotnet test --filter "FullyQualifiedName~MessageParsingTests"
+# Specific test class
+dotnet test --filter "FullyQualifiedName~PartialMessageStreamingTests"
 
 # Run with coverage
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
 Test organization:
-- **`TypesTests.cs`** - Message type system validation
-- **`ExceptionsTests.cs`** - Exception handling verification
-- **`MessageParsingTests.cs`** - JSON parsing and conversion
+- **Core protocol** - Type parsing, exception behavior, unknown-message handling, and stdio control requests
+- **MAF integration** - Prompt mapping, metadata, error content, partial streaming, and history persistence
 
 ## Building
 
@@ -884,8 +887,8 @@ dotnet build src/ClaudeCodeSdk/ClaudeCodeSdk.csproj
 # Release build with NuGet package
 dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
 
-# Build all projects in solution
-dotnet build claude-code-sdk-csharp.sln
+# Build all projects in the solution
+dotnet build claude-code-sdk-csharp.slnx
 ```
 
 Output packages:
@@ -971,18 +974,10 @@ await client.ConnectAsync();
 var client = new ClaudeSdkClient(options);  // Never disposed
 ```
 
-## Version History
+## Changelog
 
-### 1.0.0-preview (Latest)
-- Initial public preview release
-- Unified `ClaudeProcess` architecture
-- Dual-pattern API (ClaudeQuery + ClaudeSdkClient)
-- Type-safe message parsing with polymorphic content blocks
-- Tool integration support
-- Session resumption and multi-turn conversations
-- MCP server configuration
-- Comprehensive exception hierarchy
-- Full async/await support with `IAsyncDisposable`
+See the repository [CHANGELOG](../../CHANGELOG.md) for stable release history. NuGet badges in the
+[project README](../../README.md) show the latest published stable or preview packages.
 
 ## Contributing
 
