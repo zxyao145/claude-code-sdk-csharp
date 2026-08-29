@@ -19,7 +19,7 @@ dotnet test --verbosity normal
 dotnet test --filter "FullyQualifiedName~ExceptionsTests"
 
 # Run examples
-dotnet run --project examples/
+dotnet run --project examples/ClaudeCodeSdk.Examples.csproj
 
 # Pack NuGet packages for release
 dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
@@ -33,9 +33,9 @@ dotnet csharpier format .
 ```
 
 ### Prerequisites for Development
-- .NET 10.0 SDK (supports .NET 8.0+ for compatibility)
-- Node.js (required for Claude Code CLI)
-- Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
+- .NET 10.0 SDK
+- Claude Code CLI available on `PATH`
+- Node.js 18+ only when installing the CLI through npm: `npm install -g @anthropic-ai/claude-code`
 
 ## Architecture Overview
 
@@ -53,7 +53,7 @@ The SDK implements a simplified dual-pattern architecture for Claude Code intera
    - Manual connection control via `ConnectAsync/DisconnectAsync`
 
 ### Unified Core Layer
-- **`ClaudeProcess`** - Single unified process manager (replaces ITransport abstraction)
+- **`ClaudeProcess`** - Single unified process manager
   - Direct subprocess communication with Claude Code CLI
   - JSON-based message protocol with strongly-typed parsing
   - Automatic CLI discovery and process lifecycle management
@@ -89,7 +89,8 @@ Custom exceptions inherit from `ClaudeSDKException`:
 
 ### Message Parsing (`MessageParser`)
 - Converts JSON from CLI stdout into strongly-typed `IMessage` objects
-- Handles four message types: `assistant`, `user`, `system`, `result`
+- Handles five known message types: `assistant`, `user`, `system`, `result`, `stream_event`
+- Skips unknown top-level message types for forward compatibility; malformed known messages still fail parsing
 - Content blocks are polymorphic (`TextBlock`, `ToolUseBlock`, `ToolResultBlock`, `ThinkingBlock`, `ErrorContentBlock`)
 - Throws `MessageParseException` or `CLIJsonDecodeException` on invalid input
 
@@ -112,9 +113,9 @@ Configuration through environment variables (automatically set by SDK):
 
 ## Testing Strategy
 
-Tests are organized by component in `tests/` folder:
-- `TypesTests.cs` - Type system validation and message parsing
-- `ExceptionsTests.cs` - Exception handling verification
+Tests are organized by behavior in `tests/`:
+- Core protocol: types, exceptions, unknown-message handling, and stdio control requests
+- MAF integration: prompt mapping, metadata, error content, partial streaming, and history persistence
 
 Examples in `examples/` demonstrate real-world usage patterns including tool integration and streaming scenarios.
 
@@ -122,46 +123,38 @@ Examples in `examples/` demonstrate real-world usage patterns including tool int
 
 ### Structure (`src/ClaudeCodeSdk.MAF/`)
 - `ClaudeCodeAIAgent` - Main AIAgent implementation
-- `ClaudeCodeAgentThread` - Thread management with session ID persistence
+- `ClaudeCodeAgentSession` - Session management with session ID persistence
 - `ClaudeCodeAIAgentOptions` - Configuration wrapper for MAF-specific settings
 - `ClaudeSdkClientManager` - Manages ClaudeSdkClient lifecycle across sessions
+- `ClaudePartialMessageMapper` - Converts raw partial events into MAF response updates
+- `ClaudeStreamingMessageProcessor` / `ClaudeStreamingHistoryAccumulator` - Coordinate streaming and history batches
 
 ### Key Behaviors
-- System messages are extracted and set as `SystemPrompt` in `ClaudeCodeOptions`
-- Thread session IDs map to Claude Code's `Resume` parameter for conversation continuity
-- `RunAsync()` returns complete response after collecting all messages until `ResultMessage`
-- `RunStreamingAsync()` yields `AgentRunResponseUpdate` for each message received
+- Prompt construction uses the first `ChatRole.User` message and forwards its text and image `DataContent`
+- Per-request `ChatRole.System` messages are ignored; configure `ClaudeCodeAIAgentOptions.SystemPrompt` or `AppendSystemPrompt`
+- Agent session IDs are sent as `session_id` on user messages for conversation continuity
+- `RunAsync()` returns an `AgentResponse` after collecting messages through `ResultMessage`
+- `RunStreamingAsync()` yields `AgentResponseUpdate` chunks; partial mode emits text and thinking deltas immediately and complete tool calls at block end
 - Content blocks are converted to MAF types: `TextContent`, `FunctionCallContent`, `FunctionResultContent`, `TextReasoningContent`, `ErrorContent`
 
 ### Important Notes
-- `ClaudeCodeOptions.Resume` is managed automatically via `AgentThread` - do not set manually
-- `ClaudeSdkClientManager` automatically handles client creation/disposal when switching between threads
-- Session state persists via the thread's `SessionId` which maps to Claude Code sessions
-- When a different `AgentThread` (with different `SessionId`) is used, the manager automatically disposes the old client and creates a new one
+- `ClaudeCodeOptions.Resume` is not used by the MAF adapter; pass an `AgentSession` for continuity
+- `ClaudeSdkClientManager` automatically handles client creation/disposal when switching between sessions
+- Session state persists via the session's `SessionId` which maps to Claude Code sessions
+- When a different `AgentSession` is used, the manager automatically disposes the old client and creates a new one
+- With `ChatHistoryProvider`, persist completed Assistant batches before yielding and drain any remainder on every exit path; keep the stream exception primary if final persistence also fails
 
 ## Project Structure
 
 ```
 src/
 ├── ClaudeCodeSdk/              # Core SDK package
-│   ├── ClaudeProcess.cs        # Unified subprocess manager (301 lines)
-│   ├── ClaudeSdkClient.cs      # Interactive client with manual lifecycle
+│   ├── ClaudeProcess.cs        # Unified subprocess manager
+│   ├── ClaudeSDKClient.cs      # ClaudeSdkClient interactive API
 │   ├── ClaudeQuery.cs          # One-shot query API
+│   ├── ControlProtocolHandler.cs # Stdio permission and user-input callbacks
 │   ├── MessageParser.cs        # JSON-to-type conversion
-│   ├── Types/                  # Message and configuration types
-│   │   ├── IMessage.cs         # Base message interface
-│   │   ├── IContentBlock.cs    # Content block interface
-│   │   ├── AssistantMessage.cs
-│   │   ├── UserMessage.cs
-│   │   ├── SystemMessage.cs
-│   │   ├── ResultMessage.cs
-│   │   ├── TextBlock.cs
-│   │   ├── ThinkingBlock.cs
-│   │   ├── ToolUseBlock.cs
-│   │   ├── ToolResultBlock.cs
-│   │   ├── ErrorContentBlock.cs
-│   │   ├── ClaudeCodeOptions.cs
-│   │   └── Usage.cs
+│   ├── Types/                  # Messages, content blocks, options, permissions
 │   ├── Utils/
 │   │   ├── JsonUtil.cs         # snake_case serialization
 │   │   └── CommandUtil.cs      # CLI argument builder
@@ -170,10 +163,19 @@ src/
 │
 ├── ClaudeCodeSdk.MAF/          # Microsoft Agent Framework integration
 │   ├── ClaudeCodeAIAgent.cs    # AIAgent implementation
-│   ├── ClaudeCodeAgentThread.cs
+│   ├── ClaudeCodeAgentSession.cs
 │   ├── ClaudeCodeAIAgentOptions.cs
-│   └── ClaudeSdkClientManager.cs  # Client lifecycle manager
+│   ├── ClaudeSdkClientManager.cs
+│   └── ClaudeStreaming*.cs     # Partial-message persistence pipeline
 │
 examples/                       # Usage examples
 tests/                          # Unit tests
 ```
+
+## Documentation Map
+
+- `README.md` - Project overview and common consumer workflows
+- `src/ClaudeCodeSdk/README.md` - Core SDK concepts and API details
+- `src/ClaudeCodeSdk.MAF/README.md` - MAF integration, streaming, and history persistence
+- `DEVELOPMENT.md` - Contributor workflow and repository structure
+- `CHANGELOG.md` - Stable releases generated from conventional commits via `cliff.toml`

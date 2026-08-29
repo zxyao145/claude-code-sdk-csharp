@@ -25,7 +25,7 @@ Package versions use the format `x.y.z` and may include a `-preview` suffix for 
 - ✅ **Human Input Callbacks** - Handle permissions and `AskUserQuestion` through the stdio control protocol
 - ✅ **Thinking Blocks** - Extended reasoning with configurable thinking tokens
 - ✅ **Usage Tracking** - Token usage and cost monitoring
-- ✅ **.NET 10.0 Ready** - Built on the latest .NET platform (compatible with .NET 8.0+)
+- ✅ **.NET 10.0** - Targets `net10.0`
 - ✅ **Modern Async/Await** - Full `IAsyncDisposable` support with proper resource management
 
 
@@ -50,7 +50,7 @@ dotnet add package ClaudeCodeSdk.MAF
 ## Prerequisites
 
 - **.NET 10.0 SDK** 
-- **Claude Code CLI**: Install globally via npm:
+- **Claude Code CLI** available on `PATH`. For example, install it via npm:
   ```bash
   npm install -g @anthropic-ai/claude-code
   ```
@@ -62,11 +62,17 @@ dotnet add package ClaudeCodeSdk.MAF
 
 ```csharp
 using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
 
-var messages = ClaudeQuery.QueryAsync("What is the capital of France?");
-await foreach (var message in messages)
+await foreach (var message in ClaudeQuery.QueryAsync("What is the capital of France?"))
 {
-    Console.WriteLine(message.Content);
+    if (message is AssistantMessage assistantMessage)
+    {
+        foreach (var text in assistantMessage.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine(text.Text);
+        }
+    }
 }
 ```
 
@@ -74,17 +80,21 @@ await foreach (var message in messages)
 
 ```csharp
 using ClaudeCodeSdk;
+using ClaudeCodeSdk.Types;
 
-using var client = new ClaudeSdkClient();
+await using var client = new ClaudeSdkClient();
 await client.ConnectAsync();
 
-await client.SendMessageAsync("Hello Claude!");
+await client.QueryAsync("Hello Claude!");
 
-await foreach (var message in client.ReceiveMessagesAsync())
+await foreach (var message in client.ReceiveResponseAsync())
 {
     if (message is AssistantMessage assistantMsg)
     {
-        Console.WriteLine($"Claude: {assistantMsg.Content}");
+        foreach (var text in assistantMsg.Content.OfType<TextBlock>())
+        {
+            Console.WriteLine($"Claude: {text.Text}");
+        }
     }
 }
 ```
@@ -134,10 +144,10 @@ await foreach (var update in agent.RunStreamingAsync("Tell me a story", session:
 See [ClaudeCodeSdk.MAF README](src/ClaudeCodeSdk.MAF/README.md) for complete MAF integration documentation.
 
 > [!IMPORTANT]
-> MAF currently forwards user-message text content to Claude Code. If you need a global instruction, configure `ClaudeCodeAIAgentOptions.SystemPrompt` (or `AppendSystemPrompt`) instead of relying on per-request `ChatRole.System` messages.
+> MAF forwards text and image `DataContent` from the first user message. If you need a global instruction, configure `ClaudeCodeAIAgentOptions.SystemPrompt` (or `AppendSystemPrompt`) instead of relying on per-request `ChatRole.System` messages.
 
 > [!TIP]
-> For long-running conversations backed by your own storage, configure `ClaudeCodeAIAgentOptions.ChatHistoryProvider` to observe each request and save new messages after each response. Claude Code resumes model history through its provider session ID rather than resending stored messages as prompt input.
+> For long-running conversations backed by your own storage, configure `ClaudeCodeAIAgentOptions.ChatHistoryProvider` to observe each request and save new messages after each response. Claude Code resumes model history through the supplied `AgentSession` ID rather than resending stored messages as prompt input.
 
 ## Architecture
 
@@ -171,6 +181,7 @@ All messages implement `IMessage`:
 - `UserMessage` - User input
 - `SystemMessage` - System notifications and metadata
 - `ResultMessage` - End-of-conversation marker with cost/usage data
+- `StreamEvent` - Raw partial-message event emitted when `IncludePartialMessages` is enabled
 
 ### Content Blocks
 
@@ -235,9 +246,9 @@ var options = new ClaudeCodeOptions
     BaseUrl = "https://api.anthropic.com", // Custom API endpoint
     MaxThinkingTokens = 10000,          // Extended thinking budget
     SystemPrompt = "You are a helpful assistant",
-    Model = "claude-sonnet-4",
+    Model = "sonnet",                   // Stable alias for the latest Sonnet model
     IncludePartialMessages = true,       // Emit raw StreamEvent messages
-    PermissionMode = PermissionMode.Auto, // Tool approval mode
+    PermissionMode = PermissionMode.acceptEdits, // Tool approval mode
     WorkingDirectory = "/path/to/project",
     MaxTurns = 10,
     EnvironmentVariables = new Dictionary<string, string?>
@@ -258,11 +269,14 @@ deltas are emitted immediately with a stable `ResponseId` and `MessageId`; Tool 
 emitted as a complete `FunctionCallContent` when its content block ends. The later complete `AssistantMessage` is used
 only as a fallback for content that was not already streamed.
 
-When a MAF `ChatHistoryProvider` is configured together with partial messages, updates are still yielded immediately.
-Each logical Assistant message is persisted after both its `message_stop` event and complete `AssistantMessage` arrive.
+When a MAF `ChatHistoryProvider` is configured together with partial messages, deltas are emitted as they arrive. Each
+logical Assistant message is persisted after both its `message_stop` event and complete `AssistantMessage` arrive, before
+the corresponding processed message is yielded.
 The SDK combines that message's updates with `ToAgentResponse()`, so a run containing multiple Tool Use rounds can persist
-multiple completed history batches. Tool results are carried into the next completed Assistant batch. An interrupted or
-error-ending run keeps earlier completed batches but does not persist the current incomplete partial Assistant message.
+multiple completed history batches. Tool results are carried into the next completed Assistant batch. On normal completion,
+failure, cancellation, source exception, or early consumer disposal, the SDK also persists any remaining buffered updates in
+their original order, including incomplete Assistant text and tool fragments. Final persistence ignores the run cancellation
+token; if both the stream and persistence fail, the stream failure remains primary.
 Without partial events, the SDK retains the compatible end-of-run aggregation fallback.
 
 ### Handling tool permissions and questions
@@ -372,7 +386,7 @@ dotnet run --project examples/ClaudeCodeSdk.Examples.csproj
 
 ### MAF Session Management
 - `ClaudeSdkClientManager` automatically handles client creation/disposal when switching sessions
-- Agent session IDs map to Claude Code's `Resume` parameter for conversation continuity
+- Agent session IDs are sent as `session_id` on user messages for conversation continuity
 - Session state persists via the session's `SessionId`
 
 ## Troubleshooting
@@ -420,7 +434,7 @@ MIT License - see LICENSE.txt for details
 
 ## Links
 
-- [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code)
-- [Claude API Documentation](https://docs.anthropic.com/en/api/getting-started)
-- [Microsoft Agent Framework](https://learn.microsoft.com/en-us/dotnet/ai/extending-ai-framework)
+- [Claude Code Documentation](https://code.claude.com/docs)
+- [Claude API Documentation](https://platform.claude.com/docs/en/api/overview)
+- [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/)
 - [GitHub Repository](https://github.com/zxyao145/claude-code-sdk-csharp)

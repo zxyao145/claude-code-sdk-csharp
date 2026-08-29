@@ -1,128 +1,125 @@
 # Development Guide
 
-This document provides information for developers working on the Claude Code SDK for .NET.
+This guide covers the repository layout and contributor workflow for the Claude Code SDK for .NET.
 
-## Project Structure
+## Prerequisites
 
-```
+- .NET 10.0 SDK
+- Claude Code CLI available on `PATH` for examples or tests that launch it. One supported installation method is npm, which requires Node.js 18+:
+
+  ```bash
+  npm install -g @anthropic-ai/claude-code
+  ```
+
+Most unit tests exercise protocol and mapping behavior without calling the live Claude service.
+
+## Repository Layout
+
+```text
 claude-code-sdk-csharp/
-├── src/ClaudeCodeSdk/              # Main SDK library
-│   ├── Types/                      # Type definitions and models
-│   ├── Exceptions/                 # Custom exception types
-│   ├── Internal/                   # Internal implementation
-│   │   └── Transport/              # Transport layer
-│   ├── ClaudeSDKClient.cs         # Interactive client
-│   ├── ClaudeQuery.cs             # One-shot query functionality
-│   └── ClaudeCodeSDK.cs           # Main SDK entry point
-├── examples/                       # Usage examples
-├── tests/                         # Unit tests
-├── ClaudeCodeSdk.sln              # Solution file
-└── README.md                      # Documentation
+├── src/
+│   ├── ClaudeCodeSdk/              # Core CLI SDK
+│   │   ├── ClaudeProcess.cs        # Subprocess and JSON-lines transport
+│   │   ├── ClaudeSDKClient.cs      # ClaudeSdkClient interactive API
+│   │   ├── ClaudeQuery.cs          # One-shot query API
+│   │   ├── ControlProtocolHandler.cs
+│   │   ├── MessageParser.cs
+│   │   ├── Types/
+│   │   └── Utils/
+│   └── ClaudeCodeSdk.MAF/          # Microsoft Agent Framework adapter
+│       ├── ClaudeCodeAIAgent.cs
+│       ├── ClaudeCodeAgentSession.cs
+│       ├── ClaudeSdkClientManager.cs
+│       └── ClaudeStreaming*.cs     # Partial-message and history pipeline
+├── tests/                          # xUnit v3 test project
+├── examples/                       # Console examples for both packages
+├── ClaudeCodeSdk.slnx
+├── Directory.Build.props           # Shared target framework and package metadata
+└── Directory.Packages.props        # Central package versions
 ```
 
-## Building
+## Build, Test, and Format
 
 ```bash
-# Build the solution
-dotnet build
+# Restore and build all projects
+dotnet restore
+dotnet build ClaudeCodeSdk.slnx
 
-# Run tests
-dotnet test
+# Run the full test suite
+dotnet test ClaudeCodeSdk.slnx
 
-# Pack NuGet package
+# Run one test class
+dotnet test --filter "FullyQualifiedName~PartialMessageStreamingTests"
+
+# Format C# sources
+dotnet csharpier format .
+
+# Run the examples
+dotnet run --project examples/ClaudeCodeSdk.Examples.csproj
+```
+
+Pack both libraries in dependency order when diagnosing package output:
+
+```bash
 dotnet pack src/ClaudeCodeSdk/ClaudeCodeSdk.csproj -c Release
+dotnet pack src/ClaudeCodeSdk.MAF/ClaudeCodeSdk.MAF.csproj -c Release
 ```
 
-## Code Style
+Tagged releases override `PackageVersion` in the publish workflow. The value in
+`Directory.Build.props` is the local development default.
 
-- Follow standard C# naming conventions
-- Use nullable reference types throughout
-- Prefer records for data types
-- Use async/await for all I/O operations
-- Include XML documentation for public APIs
+## Architecture
 
-## Key Components
+### Core SDK
 
-### Transport Layer
+`ClaudeProcess` owns the Claude Code CLI subprocess and its newline-delimited JSON protocol.
+Both public interaction styles delegate to it:
 
-The transport layer handles communication with the Claude CLI subprocess:
+1. `ClaudeQuery.QueryAsync(...)` manages a one-shot process automatically.
+2. `ClaudeSdkClient` exposes connection, query, response, interrupt, and disposal lifecycle methods for interactive sessions.
 
-- `ITransport` - Interface for transport implementations
-- `SubprocessCliTransport` - Default subprocess implementation
+`ControlProtocolHandler` handles stdio permission requests without blocking the receive loop.
+`MessageParser` maps the five known top-level message types (`system`, `assistant`, `user`,
+`result`, and `stream_event`) and skips unknown types for forward compatibility. Malformed known
+messages still raise the SDK's parsing exceptions.
 
-### Message System
+### Microsoft Agent Framework Integration
 
-Messages are parsed from JSON into strongly-typed objects:
+`ClaudeCodeAIAgent` adapts the core SDK to `Microsoft.Agents.AI.AIAgent`. Sessioned calls reuse a
+`ClaudeSdkClient` through `ClaudeSdkClientManager`; calls without a session use `ClaudeQuery`.
 
-- `MessageParser` - Converts JSON to typed messages
-- Message types implement `IMessage`
-- Content blocks implement `IContentBlock`
+With partial messages enabled, `ClaudePartialMessageMapper` emits `AgentResponseUpdate` chunks.
+The streaming history pipeline persists completed Assistant batches before yielding and drains
+remaining buffered updates on every exit path, including cancellation, source failure, and early
+consumer disposal.
 
-### Client Architecture
+## Tests
 
-Two main interaction patterns:
+The `tests/` project is organized by behavior:
 
-1. **One-shot queries** via `ClaudeQuery.QueryAsync()`
-   - Simple, fire-and-forget style
-   - Good for batch processing
-   
-2. **Interactive conversations** via `ClaudeSDKClient`
-   - Bidirectional communication
-   - Session management
-   - Interrupt support
+- `TypesTests.cs`, `ExceptionsTests.cs`, and `UnknownMessageTypeTests.cs` cover the core type and parsing contracts.
+- `ControlProtocolTests.cs` covers permissions, cancellation, and `AskUserQuestion` callbacks.
+- `ClaudeMafPromptBuilderTests.cs`, `MafAgentMetadataTests.cs`, and `MafErrorContentTests.cs` cover MAF conversion behavior.
+- `PartialMessageStreamingTests.cs` covers partial-event mapping and chat-history persistence across normal and exceptional exits.
 
-## Testing
+Add or update tests for every behavior change. Prefer focused unit tests for protocol mapping and
+reserve live CLI interaction for examples or explicit integration testing.
 
-Tests are organized by component:
+## Documentation
 
-- `TypesTests.cs` - Type system tests
-- `ExceptionsTests.cs` - Exception handling tests
-- `MessageParserTests.cs` - Message parsing tests
-- `ClientTests.cs` - Client functionality tests
+- `README.md` is the project-level consumer guide.
+- `src/ClaudeCodeSdk/README.md` documents the core package.
+- `src/ClaudeCodeSdk.MAF/README.md` documents MAF-specific behavior.
+- `CHANGELOG.md` contains stable releases generated from conventional commits using `cliff.toml`;
+  preview tags are intentionally excluded.
 
-Run tests with:
-```bash
-dotnet test --verbosity normal
-```
+Update every affected audience when a public API or behavior changes. Keep implementation rules
+in `CLAUDE.md` and release history in the changelog rather than duplicating either here.
 
-## Examples
+## Contribution Checklist
 
-The examples project demonstrates:
-
-- Basic query usage
-- Advanced options
-- Tool integration  
-- Interactive conversations
-- Streaming scenarios
-
-Run examples with:
-```bash
-dotnet run --project examples/
-```
-
-## Error Handling
-
-The SDK uses a hierarchy of custom exceptions:
-
-```
-ClaudeSDKException (base)
-├── CLIConnectionException
-│   └── CLINotFoundException
-├── ProcessException
-├── CLIJsonDecodeException
-└── MessageParseException
-```
-
-## Performance Considerations
-
-- Use `IAsyncEnumerable` for streaming to avoid buffering all messages
-- Implement proper disposal patterns for resources
-- Cancel long-running operations with `CancellationToken`
-- Pool JSON serializer options to reduce allocations
-
-## Contributing
-
-1. Follow the existing code style and patterns
-2. Add tests for new functionality
-3. Update documentation for public API changes
-4. Ensure compatibility with .NET 8.0+
+1. Match the existing nullable, async, and naming conventions.
+2. Add focused tests for the changed behavior.
+3. Run formatting, build, and tests.
+4. Update the relevant public README for consumer-visible changes.
+5. Use Conventional Commit subjects so release notes can be generated correctly.

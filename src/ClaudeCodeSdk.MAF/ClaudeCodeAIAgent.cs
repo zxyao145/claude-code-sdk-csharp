@@ -24,7 +24,7 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
         : this(new ClaudeCodeAIAgentOptions(), null) { }
 
     /// <summary>
-    /// ClaudeCodeOptions.Resume will not working. Please replace with AgentSession
+    /// ClaudeCodeOptions.Resume is not used by the MAF adapter. Pass an AgentSession to preserve conversation continuity.
     /// </summary>
     /// <param name="options"></param>
     /// <param name="logger"></param>
