@@ -176,8 +176,9 @@ foreach (var message in response.Messages)
 At runtime:
 
 - `InvokingAsync(...)` runs **before** the request is sent. Claude Code resumes model history through its provider session ID, so stored messages are not resent as prompt input.
-- `InvokedAsync(...)` receives only new request messages plus completed response messages. With partial messages enabled, it can run multiple times during one agent run—once for each safely completed Assistant message and once for any final remainder.
-- Streaming updates are yielded immediately. A message becomes persistable only after both `message_stop` and its complete `AssistantMessage` arrive, then its updates are combined with `ToAgentResponse()`. Earlier completed Tool Use rounds remain stored if a later round is interrupted; the incomplete round is discarded.
+- `InvokedAsync(...)` receives only new request messages plus response messages. With partial messages enabled, it can run multiple times during one agent run—once for each safely completed Assistant message and once for the final remainder on every exit path.
+- Assistant messages that receive both `message_stop` and their complete `AssistantMessage` are persisted incrementally. On normal completion, failure, cancellation, source exception, or early consumer disposal, every remaining buffered update is persisted in original order, including incomplete Assistant text and tool fragments.
+- The final persistence attempt ignores the run cancellation token. If the stream and final persistence both fail, the stream failure remains primary; otherwise the persistence failure is propagated.
 - `RunAsync(...)` and `RunStreamingAsync(...)` use the same completion and persistence state machine.
 - Without partial events, history keeps the compatible end-of-run aggregation fallback.
 
@@ -423,8 +424,8 @@ sequenceDiagram
 ### Streaming Pipeline
 
 `RunStreamingAsync` yields `AgentResponseUpdate`s as they arrive. The processor feeds every
-`IMessage` through the mapper, yields the updates immediately, and persists a history batch only
-once a message is complete.
+`IMessage` through the mapper, persists completed Assistant batches before yielding, and drains
+all remaining updates from a shared `finally` block when the run exits.
 
 ```mermaid
 sequenceDiagram
@@ -442,12 +443,13 @@ sequenceDiagram
         Agent->>Proc: Process(message)
         Proc->>Map: Map(message) -> AgentResponseUpdate[]
         Proc->>Acc: Add(updates)
-        Agent-->>App: yield each AgentResponseUpdate
         Proc->>Proc: TryConsumeCompletedMessageId -> CompleteAssistantMessage
         Agent->>Agent: PersistStreamingBatch (InvokedAsync)
+        Agent-->>App: yield each AgentResponseUpdate
     end
-    Proc->>Proc: CompleteRun() -> final batch
-    Agent->>Agent: PersistStreamingBatch (InvokedAsync)
+    Note over Agent,CLI: normal end / failure / cancellation / early disposal
+    Agent->>Proc: CompleteRun() -> all remaining updates
+    Agent->>Agent: PersistStreamingBatch with CancellationToken.None
 ```
 
 With `IncludePartialMessages` enabled, the CLI emits raw `stream_event`s that the mapper
@@ -465,11 +467,12 @@ stateDiagram-v2
     Persistable --> [*]: TryConsumeCompletedMessageId
 ```
 
-A message only becomes persistable once **both** `message_stop` and the complete
-`AssistantMessage` have arrived — tracked via `_streamStoppedMessageIds` and
+A message becomes eligible for incremental persistence once **both** `message_stop` and the
+complete `AssistantMessage` have arrived — tracked via `_streamStoppedMessageIds` and
 `_assistantSnapshotMessageIds`. Already-streamed content blocks are deduplicated through
 `EmittedContentIndexes`, so the trailing `AssistantMessage` only emits the content blocks that
-were not streamed incrementally.
+were not streamed incrementally. Any updates still buffered when the run exits are persisted by
+the final drain even when the Assistant message never reached this completed state.
 
 ### Session & Client Lifecycle
 
@@ -505,17 +508,17 @@ sequenceDiagram
 
     Agent->>Proc: Process(message)
     Proc->>Acc: Add(updates)
-    Proc->>Proc: TryConsumeCompletedMessageId
     alt message_stop AND AssistantMessage both arrived
+        Proc->>Proc: TryConsumeCompletedMessageId
         Proc->>Acc: CompleteAssistantMessage(id)
         Proc-->>Agent: ClaudeHistoryBatch
         Agent->>Prov: InvokedAsync(request + completed response)
     end
-    Note over Agent,Prov: end of run
+    Note over Agent,Prov: every exit path
     Agent->>Proc: CompleteRun()
     Proc->>Acc: CompleteRun()
     Proc-->>Agent: final ClaudeHistoryBatch
-    Agent->>Prov: InvokedAsync(final remainder)
+    Agent->>Prov: InvokedAsync(all remaining updates)
 ```
 
 ## Content Type Conversions
@@ -541,7 +544,7 @@ The integration automatically converts between Claude Code content blocks and MA
 - Session IDs are generated when creating/deserializing `ClaudeCodeAgentSession`
 - Multi-turn conversations use the session ID passed to `ClaudeSdkClient.QueryAsync(...)`
 - AgentSession can be serialized/deserialized with their session ID preserved
-- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run and may call the invoked hook after each completed Assistant message; Claude Code resumes model history by session ID, while the provider stores staged application history
+- If `ChatHistoryProvider` is configured, the agent calls the invoking hook before each run, may call the invoked hook after each completed Assistant message, and always drains any remaining buffered updates when the run exits; Claude Code resumes model history by session ID, while the provider stores staged application history
 
 ### Connection Lifecycle
 - Non-session calls use one-shot `ClaudeQuery.QueryAsync(...)`

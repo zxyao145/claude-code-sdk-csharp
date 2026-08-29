@@ -12,7 +12,6 @@ internal sealed class ClaudeStreamingMessageProcessor
     private readonly ClaudePartialMessageMapper? _mapper;
     private readonly ClaudeStreamingHistoryAccumulator? _historyAccumulator;
     private IReadOnlyList<ChatMessage> _unpersistedRequestMessages;
-    private bool _runFailed;
 
     public ClaudeStreamingMessageProcessor(
         IReadOnlyList<ChatMessage> requestMessages,
@@ -39,10 +38,6 @@ internal sealed class ClaudeStreamingMessageProcessor
 
         var updates = _mapper.Map(message).ToList();
         _historyAccumulator?.Add(updates);
-        if (message is ResultMessage resultMessage)
-        {
-            _runFailed |= resultMessage.IsError;
-        }
 
         ClaudeHistoryBatch? completedBatch = null;
         if (
@@ -59,7 +54,7 @@ internal sealed class ClaudeStreamingMessageProcessor
 
     public ClaudeHistoryBatch? CompleteRun()
     {
-        if (_historyAccumulator == null || _runFailed)
+        if (_historyAccumulator == null)
         {
             return null;
         }
