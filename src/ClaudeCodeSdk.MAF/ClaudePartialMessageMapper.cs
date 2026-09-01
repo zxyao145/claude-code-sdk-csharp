@@ -1,9 +1,9 @@
+using System.Text;
+using System.Text.Json;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using System.Text;
-using System.Text.Json;
 
 namespace ClaudeCodeSdk.MAF;
 
@@ -324,15 +324,13 @@ internal sealed class ClaudePartialMessageMapper
     ) =>
         new(ChatRole.Assistant, content == null ? null : [content])
         {
-            AuthorName = state.Model,
+            AuthorName = IMessageExtension.AgentName,
             ResponseId = _responseId,
             MessageId = state.MessageId,
             RawRepresentation = streamEvent,
-            AdditionalProperties = new AdditionalPropertiesDictionary
-            {
-                ["agentName"] = IMessageExtension.AgentName,
-                ["type"] = MessageType.Assistant.Value,
-            },
+            AdditionalProperties = IMessageExtension.CreateAssistantAdditionalProperties(
+                state.Model
+            ),
         };
 
     private bool TryGetActiveMessage(StreamEvent streamEvent, out MessageState state) =>

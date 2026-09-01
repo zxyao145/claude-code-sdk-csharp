@@ -1,7 +1,7 @@
+using System.Text.Json;
 using ClaudeCodeSdk.MAF;
 using ClaudeCodeSdk.Types;
 using Microsoft.Extensions.AI;
-using System.Text.Json;
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;
@@ -23,6 +23,7 @@ public class MafErrorContentTests
         Assert.Equal("quota exceeded", error.Message);
         Assert.True(Assert.IsType<bool>(error.AdditionalProperties!["isFatalError"]));
         Assert.IsType<UsageContent>(update.Contents[1]);
+        Assert.Equal("claude-code", update.AuthorName);
     }
 
     [Fact]
@@ -60,6 +61,8 @@ public class MafErrorContentTests
         var error = Assert.IsType<ErrorContent>(Assert.Single(update!.Contents));
         Assert.Equal("Claude Code API retry 5/10: unknown", error.Message);
         Assert.Null(error.AdditionalProperties);
+        Assert.Equal("claude-code", update.AuthorName);
+        Assert.Equal("claude-code", update.AdditionalProperties!["agentName"]);
     }
 
     [Fact]
@@ -220,6 +223,8 @@ public class MafErrorContentTests
 
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
+        Assert.Equal("claude-code", chatMessage.AuthorName);
+        Assert.Equal("claude-test", chatMessage.AdditionalProperties!["modelName"]);
         Assert.Collection(
             chatMessage.Contents,
             content => Assert.Equal("hello", Assert.IsType<TextContent>(content).Text),
@@ -248,6 +253,7 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.System, chatMessage.Role);
+        Assert.Equal("claude-code", chatMessage.AuthorName);
         Assert.Contains(
             "ready",
             Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
@@ -262,6 +268,7 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.User, chatMessage.Role);
+        Assert.Equal("claude-code", chatMessage.AuthorName);
         Assert.Equal(
             "tool output",
             Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
@@ -289,6 +296,7 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.Tool, chatMessage.Role);
+        Assert.Equal("claude-code", chatMessage.AuthorName);
         Assert.Equal(
             "tool-1",
             Assert.IsType<FunctionResultContent>(chatMessage.Contents[0]).CallId
@@ -317,6 +325,7 @@ public class MafErrorContentTests
 
         Assert.NotNull(update);
         Assert.Equal(ChatRole.User, update.Role);
+        Assert.Equal("claude-code", update.AuthorName);
     }
 
     [Fact]
@@ -330,6 +339,7 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.System, chatMessage.Role);
+        Assert.Equal("claude-code", chatMessage.AuthorName);
         Assert.Collection(
             chatMessage.Contents,
             content =>

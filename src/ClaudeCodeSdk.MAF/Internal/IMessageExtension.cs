@@ -8,6 +8,7 @@ namespace ClaudeCodeSdk.MAF;
 internal static partial class IMessageExtension
 {
     internal const string AgentName = "claude-code";
+    internal const string ModelNamePropertyName = "modelName";
 
     public static AgentResponseUpdate? ToAgentRunResponseUpdate(this IMessage claudeMessage)
     {
@@ -30,6 +31,7 @@ internal static partial class IMessageExtension
             {
                 MessageId = claudeMessage.Id,
                 Role = ChatRole.System,
+                AuthorName = AgentName,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
                     { "agentName", AgentName },
@@ -51,6 +53,7 @@ internal static partial class IMessageExtension
             {
                 MessageId = claudeMessage.Id,
                 Role = role,
+                AuthorName = AgentName,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
                     { "agentName", AgentName },
@@ -117,6 +120,7 @@ internal static partial class IMessageExtension
                 {
                     MessageId = claudeMessage.Id,
                     Role = ChatRole.System,
+                    AuthorName = AgentName,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
                         { "agentName", AgentName },
@@ -140,15 +144,27 @@ internal static partial class IMessageExtension
         {
             MessageId = assistantMessage.Id,
             Role = ChatRole.Assistant,
-            AuthorName = assistantMessage.Model,
+            AuthorName = AgentName,
             RawRepresentation = assistantMessage,
-            AdditionalProperties = new AdditionalPropertiesDictionary
-            {
-                { "agentName", AgentName },
-                { "type", assistantMessage.Type.Value },
-            },
+            AdditionalProperties = CreateAssistantAdditionalProperties(assistantMessage.Model),
             Contents = ConvertContent(contents),
         };
+
+    internal static AdditionalPropertiesDictionary CreateAssistantAdditionalProperties(
+        string modelName
+    )
+    {
+        var properties = new AdditionalPropertiesDictionary
+        {
+            ["type"] = MessageType.Assistant.Value,
+        };
+        if (!string.IsNullOrWhiteSpace(modelName))
+        {
+            properties[ModelNamePropertyName] = modelName.Trim();
+        }
+
+        return properties;
+    }
 
     private static List<AIContent> ConvertContent(IEnumerable<IContentBlock> contents)
     {
