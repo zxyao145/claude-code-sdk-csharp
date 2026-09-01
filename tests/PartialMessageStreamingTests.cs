@@ -1,10 +1,10 @@
+using System.Text.Json;
+using System.Threading.Channels;
 using ClaudeCodeSdk.MAF;
 using ClaudeCodeSdk.Types;
 using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using System.Text.Json;
-using System.Threading.Channels;
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;
@@ -128,7 +128,8 @@ public class PartialMessageStreamingTests
             {
                 Assert.Equal("message-1", update.MessageId);
                 Assert.Equal(ChatRole.Assistant, update.Role);
-                Assert.Equal("claude-sonnet", update.AuthorName);
+                Assert.Equal("claude-code", update.AuthorName);
+                Assert.Equal("claude-sonnet", update.AdditionalProperties!["modelName"]);
             }
         );
         Assert.Equal(
@@ -215,9 +216,11 @@ public class PartialMessageStreamingTests
 
         // Assert
         Assert.Equal("parent-message", parentUpdate.MessageId);
-        Assert.Equal("parent-model", parentUpdate.AuthorName);
+        Assert.Equal("claude-code", parentUpdate.AuthorName);
+        Assert.Equal("parent-model", parentUpdate.AdditionalProperties!["modelName"]);
         Assert.Equal("child-message", childUpdate.MessageId);
-        Assert.Equal("child-model", childUpdate.AuthorName);
+        Assert.Equal("claude-code", childUpdate.AuthorName);
+        Assert.Equal("child-model", childUpdate.AdditionalProperties!["modelName"]);
         Assert.Equal(parentUpdate.ResponseId, childUpdate.ResponseId);
     }
 
@@ -536,7 +539,8 @@ public class PartialMessageStreamingTests
         );
         var rateLimit = finalCall.ResponseMessages[1];
         Assert.Equal(ChatRole.Assistant, rateLimit.Role);
-        Assert.Equal("<synthetic>", rateLimit.AuthorName);
+        Assert.Equal("claude-code", rateLimit.AuthorName);
+        Assert.Equal("<synthetic>", rateLimit.AdditionalProperties!["modelName"]);
         Assert.Equal(
             "rate_limit",
             Assert.IsType<ErrorContent>(Assert.Single(rateLimit.Contents)).Message
@@ -966,11 +970,14 @@ public class PartialMessageStreamingTests
         );
 
         // Assert
-        Assert.Equal("fallback", Assert.Single(updates).Text);
-        Assert.Equal(
-            "fallback",
-            Assert.Single(Assert.Single(provider.Calls).ResponseMessages).Text
-        );
+        var update = Assert.Single(updates);
+        Assert.Equal("fallback", update.Text);
+        Assert.Equal("claude-code", update.AuthorName);
+        Assert.Equal("claude-sonnet", update.AdditionalProperties!["modelName"]);
+        var persisted = Assert.Single(Assert.Single(provider.Calls).ResponseMessages);
+        Assert.Equal("fallback", persisted.Text);
+        Assert.Equal("claude-code", persisted.AuthorName);
+        Assert.Equal("claude-sonnet", persisted.AdditionalProperties!["modelName"]);
     }
 
     private static StreamEvent ParseStreamEvent(string json) =>
