@@ -45,10 +45,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             throw new CLIConnectionException("Already connected");
 
         var args = CommandUtil.BuildCommand(_options, true, "");
-        var argsString = string.Join(" ", args);
-        _logger?.LogDebug("Starting Claude CLI: {CliPath} {Args}", _cliPath, argsString);
+        _logger?.LogDebug("Starting Claude CLI: {CliPath} {Args}", _cliPath, string.Join(" ", args));
 
-        _process = new Process { StartInfo = BuildStartInfo(_cliPath, argsString) };
+        _process = new Process { StartInfo = BuildStartInfo(_cliPath, args) };
 
         try
         {
@@ -233,13 +232,12 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         }
     }
 
-    private ProcessStartInfo BuildStartInfo(string fileName, string arguments)
+    private ProcessStartInfo BuildStartInfo(string fileName, IReadOnlyList<string> arguments)
     {
         var workingDir = _options.WorkingDirectory ?? Directory.GetCurrentDirectory();
         var startInfo = new ProcessStartInfo
         {
             FileName = CommandUtil.GetOptimallyQualifiedTargetFilePath(fileName),
-            Arguments = arguments,
             WorkingDirectory = workingDir,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -250,6 +248,15 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+
+        // ArgumentList, not Arguments: .NET quotes each entry for the platform. Joining them into
+        // one string leaves any value containing a space or a newline to be re-split by the
+        // receiving process, so a multi-word --system-prompt arrived as its first word and the rest
+        // became stray positional arguments.
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
         // Then apply custom environment variables from options (overrides system vars)
         if (_options.EnvironmentVariables != null)
