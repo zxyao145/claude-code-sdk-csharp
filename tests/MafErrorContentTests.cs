@@ -350,7 +350,7 @@ public class MafErrorContentTests
 
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
-        Assert.Equal(ChatRole.System, chatMessage.Role);
+        Assert.Equal(ChatRole.Assistant, chatMessage.Role);
         Assert.Equal("claude-code", chatMessage.AuthorName);
         Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal(string.Empty, chatMessage.AdditionalProperties["modelName"]);
@@ -380,7 +380,7 @@ public class MafErrorContentTests
 
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
-        Assert.Equal(ChatRole.System, chatMessage.Role);
+        Assert.Equal(ChatRole.Assistant, chatMessage.Role);
         Assert.Collection(
             chatMessage.Contents,
             content => Assert.Equal("done", Assert.IsType<TextContent>(content).Text),
