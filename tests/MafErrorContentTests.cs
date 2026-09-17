@@ -24,6 +24,8 @@ public class MafErrorContentTests
         Assert.True(Assert.IsType<bool>(error.AdditionalProperties!["isFatalError"]));
         Assert.IsType<UsageContent>(update.Contents[1]);
         Assert.Equal("claude-code", update.AuthorName);
+        Assert.False(update.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, update.AdditionalProperties["modelName"]);
     }
 
     [Fact]
@@ -62,7 +64,8 @@ public class MafErrorContentTests
         Assert.Equal("Claude Code API retry 5/10: unknown", error.Message);
         Assert.Null(error.AdditionalProperties);
         Assert.Equal("claude-code", update.AuthorName);
-        Assert.Equal("claude-code", update.AdditionalProperties!["agentName"]);
+        Assert.False(update.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, update.AdditionalProperties["modelName"]);
     }
 
     [Fact]
@@ -224,6 +227,7 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal("claude-code", chatMessage.AuthorName);
+        Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal("claude-test", chatMessage.AdditionalProperties!["modelName"]);
         Assert.Collection(
             chatMessage.Contents,
@@ -254,6 +258,8 @@ public class MafErrorContentTests
 
         Assert.Equal(ChatRole.System, chatMessage.Role);
         Assert.Equal("claude-code", chatMessage.AuthorName);
+        Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, chatMessage.AdditionalProperties["modelName"]);
         Assert.Contains(
             "ready",
             Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
@@ -269,6 +275,8 @@ public class MafErrorContentTests
 
         Assert.Equal(ChatRole.User, chatMessage.Role);
         Assert.Equal("claude-code", chatMessage.AuthorName);
+        Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, chatMessage.AdditionalProperties["modelName"]);
         Assert.Equal(
             "tool output",
             Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
@@ -297,6 +305,8 @@ public class MafErrorContentTests
 
         Assert.Equal(ChatRole.Tool, chatMessage.Role);
         Assert.Equal("claude-code", chatMessage.AuthorName);
+        Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, chatMessage.AdditionalProperties["modelName"]);
         Assert.Equal(
             "tool-1",
             Assert.IsType<FunctionResultContent>(chatMessage.Contents[0]).CallId
@@ -326,6 +336,8 @@ public class MafErrorContentTests
         Assert.NotNull(update);
         Assert.Equal(ChatRole.User, update.Role);
         Assert.Equal("claude-code", update.AuthorName);
+        Assert.False(update.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, update.AdditionalProperties["modelName"]);
     }
 
     [Fact]
@@ -340,6 +352,8 @@ public class MafErrorContentTests
 
         Assert.Equal(ChatRole.System, chatMessage.Role);
         Assert.Equal("claude-code", chatMessage.AuthorName);
+        Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
+        Assert.Equal(string.Empty, chatMessage.AdditionalProperties["modelName"]);
         Assert.Collection(
             chatMessage.Contents,
             content =>
