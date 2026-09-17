@@ -34,9 +34,12 @@ internal static partial class IMessageExtension
                 AuthorName = AgentName,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    { "agentName", AgentName },
                     { "type", claudeMessage.Type.Value },
                     { "subtype", systemMessage.Subtype },
+                    {
+                        ModelNamePropertyName,
+                        NormalizeModelName(GetSystemDataText(systemMessage.Data, "model"))
+                    },
                 },
                 Contents = [content],
             };
@@ -56,8 +59,8 @@ internal static partial class IMessageExtension
                 AuthorName = AgentName,
                 AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    { "agentName", AgentName },
                     { "type", claudeMessage.Type.Value },
+                    { ModelNamePropertyName, string.Empty },
                 },
             };
 
@@ -119,14 +122,14 @@ internal static partial class IMessageExtension
                 return new AgentResponseUpdate
                 {
                     MessageId = claudeMessage.Id,
-                    Role = ChatRole.System,
+                    Role = ChatRole.Assistant,
                     AuthorName = AgentName,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        { "agentName", AgentName },
                         { "type", claudeMessage.Type.Value },
                         { "subtype", resultMessage.Subtype },
                         { "totalCostUsd", resultMessage.TotalCostUsd },
+                        { ModelNamePropertyName, string.Empty },
                     },
                     Contents = contents,
                 };
@@ -157,14 +160,14 @@ internal static partial class IMessageExtension
         var properties = new AdditionalPropertiesDictionary
         {
             ["type"] = MessageType.Assistant.Value,
+            [ModelNamePropertyName] = NormalizeModelName(modelName),
         };
-        if (!string.IsNullOrWhiteSpace(modelName))
-        {
-            properties[ModelNamePropertyName] = modelName.Trim();
-        }
 
         return properties;
     }
+
+    private static string NormalizeModelName(string? modelName) =>
+        string.IsNullOrWhiteSpace(modelName) ? string.Empty : modelName.Trim();
 
     private static List<AIContent> ConvertContent(IEnumerable<IContentBlock> contents)
     {

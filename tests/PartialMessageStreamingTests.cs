@@ -129,6 +129,7 @@ public class PartialMessageStreamingTests
                 Assert.Equal("message-1", update.MessageId);
                 Assert.Equal(ChatRole.Assistant, update.Role);
                 Assert.Equal("claude-code", update.AuthorName);
+                Assert.False(update.AdditionalProperties!.ContainsKey("agentName"));
                 Assert.Equal("claude-sonnet", update.AdditionalProperties!["modelName"]);
             }
         );
@@ -217,9 +218,11 @@ public class PartialMessageStreamingTests
         // Assert
         Assert.Equal("parent-message", parentUpdate.MessageId);
         Assert.Equal("claude-code", parentUpdate.AuthorName);
+        Assert.False(parentUpdate.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal("parent-model", parentUpdate.AdditionalProperties!["modelName"]);
         Assert.Equal("child-message", childUpdate.MessageId);
         Assert.Equal("claude-code", childUpdate.AuthorName);
+        Assert.False(childUpdate.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal("child-model", childUpdate.AdditionalProperties!["modelName"]);
         Assert.Equal(parentUpdate.ResponseId, childUpdate.ResponseId);
     }
@@ -540,6 +543,7 @@ public class PartialMessageStreamingTests
         var rateLimit = finalCall.ResponseMessages[1];
         Assert.Equal(ChatRole.Assistant, rateLimit.Role);
         Assert.Equal("claude-code", rateLimit.AuthorName);
+        Assert.False(rateLimit.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal("<synthetic>", rateLimit.AdditionalProperties!["modelName"]);
         Assert.Equal(
             "rate_limit",
@@ -973,10 +977,12 @@ public class PartialMessageStreamingTests
         var update = Assert.Single(updates);
         Assert.Equal("fallback", update.Text);
         Assert.Equal("claude-code", update.AuthorName);
+        Assert.False(update.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal("claude-sonnet", update.AdditionalProperties!["modelName"]);
         var persisted = Assert.Single(Assert.Single(provider.Calls).ResponseMessages);
         Assert.Equal("fallback", persisted.Text);
         Assert.Equal("claude-code", persisted.AuthorName);
+        Assert.False(persisted.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal("claude-sonnet", persisted.AdditionalProperties!["modelName"]);
     }
 
