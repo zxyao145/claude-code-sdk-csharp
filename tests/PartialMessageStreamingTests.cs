@@ -80,8 +80,12 @@ public class PartialMessageStreamingTests
         Assert.True(message.Event.GetProperty("future_value").GetProperty("enabled").GetBoolean());
     }
 
-    [Fact]
-    public void Map_TextThinkingAndToolEvents_ProducesComposableAgentResponseUpdates()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Map_TextThinkingAndToolEvents_ProducesComposableAgentResponseUpdates(
+        bool includeProgress
+    )
     {
         // Arrange
         var mapper = new ClaudePartialMessageMapper();
@@ -116,7 +120,21 @@ public class PartialMessageStreamingTests
         };
 
         // Act
-        var updates = messages.SelectMany(mapper.Map).ToList();
+        var input = includeProgress
+            ? messages.SelectMany(message =>
+                new IMessage[]
+                {
+                    ThinkingTokensMessage(),
+                    StatusMessage(),
+                    VcsStateChangedMessage(),
+                    message,
+                }
+            )
+            : messages;
+        var updates = input
+            .SelectMany(mapper.Map)
+            .Where(update => update.Role != ChatRole.System)
+            .ToList();
         var response = updates.ToAgentResponse();
 
         // Assert
@@ -1141,6 +1159,269 @@ public class PartialMessageStreamingTests
             SessionId = "session-1",
             Content = [new ErrorContentBlock("rate_limit")],
         };
+
+    [Fact]
+    public void ToChatMessage_ThinkingTokens_PreservesProtocolAndSerializesData()
+    {
+        // Arrange
+        var message = ThinkingTokensMessage();
+
+        // Act
+        var update = message.ToAgentRunResponseUpdate();
+        var chatMessage = message.ToChatMessage();
+
+        // Assert
+        Assert.Equal("thinking_tokens", message.Subtype);
+        Assert.Equal("399", message.Data["estimated_tokens"].ToString());
+        Assert.Equal("2", message.Data["estimated_tokens_delta"].ToString());
+        var text = Assert
+            .IsType<TextContent>(
+                Assert.Single(
+                    Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents
+                )
+            )
+            .Text;
+        Assert.Contains("estimated_tokens", text);
+        Assert.Contains("399", text);
+        Assert.Equal(
+            text,
+            Assert
+                .IsType<TextContent>(
+                    Assert.Single(Assert.IsType<ChatMessage>(chatMessage).Contents)
+                )
+                .Text
+        );
+        Assert.Same(message, update.RawRepresentation);
+        Assert.Same(message.Data, update.AdditionalProperties!["systemData"]);
+        Assert.Equal(message.SessionId, update.AdditionalProperties["session_id"]);
+        var mapped = Assert.Single(new ClaudePartialMessageMapper().Map(message));
+        Assert.Contains(
+            "estimated_tokens",
+            Assert.IsType<TextContent>(Assert.Single(mapped.Contents)).Text
+        );
+    }
+
+    [Fact]
+    public void Process_ProgressBetweenToolRounds_PersistsProgressAsSystemUpdates()
+    {
+        // Arrange
+        var processor = new ClaudeStreamingMessageProcessor([], true, true);
+        var messages = ToolRoundMessages()
+            .Concat(FinalAnswerMessages())
+            .Append(ApiRetrySystemMessage())
+            .Append(
+                ErrorResultMessage() with
+                {
+                    Usage = new Usage { InputTokens = 10, OutputTokens = 2 },
+                }
+            )
+            .ToList();
+        var persisted = new List<Microsoft.Agents.AI.AgentResponseUpdate>();
+
+        // Act
+        foreach (var message in messages)
+        {
+            AssertProgress(
+                processor.Process(ThinkingTokensMessage()),
+                "thinking-progress",
+                "estimated_tokens"
+            );
+            AssertProgress(processor.Process(StatusMessage()), "status-progress", "status");
+            AssertProgress(processor.Process(VcsStateChangedMessage()), "vcs-progress", "commit");
+            var mapped = processor.Process(message);
+            if (mapped.CompletedHistoryBatch is { } batch)
+            {
+                persisted.AddRange(batch.ResponseUpdates);
+            }
+        }
+        if (processor.CompleteRun() is { } finalBatch)
+        {
+            persisted.AddRange(finalBatch.ResponseUpdates);
+        }
+
+        // Assert: progress updates persist as system-role protocol markers carrying the
+        // serialized system data, without disturbing the conversation contents.
+        var progressUpdates = persisted
+            .Where(update =>
+                update.MessageId is "thinking-progress" or "status-progress" or "vcs-progress"
+            )
+            .ToList();
+        Assert.Equal(messages.Count * 3, progressUpdates.Count);
+        Assert.All(
+            progressUpdates,
+            update =>
+            {
+                Assert.Equal(ChatRole.System, update.Role);
+                Assert.IsType<SystemMessage>(update.RawRepresentation);
+                Assert.IsType<TextContent>(Assert.Single(update.Contents));
+            }
+        );
+
+        var contents = persisted
+            .Where(update =>
+                update.MessageId is not ("thinking-progress" or "status-progress" or "vcs-progress")
+            )
+            .SelectMany(update => update.Contents)
+            .ToList();
+        Assert.Equal(
+            "done",
+            string.Concat(contents.OfType<TextContent>().Select(content => content.Text))
+        );
+        Assert.Single(contents.OfType<FunctionCallContent>());
+        Assert.Single(contents.OfType<FunctionResultContent>());
+        Assert.Equal(2, contents.OfType<ErrorContent>().Count());
+        var usage = Assert.Single(contents.OfType<UsageContent>()).Details;
+        Assert.Equal(10, usage.InputTokenCount);
+        Assert.Equal(2, usage.OutputTokenCount);
+    }
+
+    private static void AssertProgress(
+        MappedClaudeMessage mapped,
+        string messageId,
+        string expectedDataKey
+    )
+    {
+        var update = Assert.Single(mapped.Updates);
+        Assert.Equal(messageId, update.MessageId);
+        Assert.Equal(ChatRole.System, update.Role);
+        Assert.Contains(
+            expectedDataKey,
+            Assert.IsType<TextContent>(Assert.Single(update.Contents)).Text
+        );
+        Assert.Null(mapped.CompletedHistoryBatch);
+    }
+
+    [Theory]
+    [InlineData("requesting")]
+    [InlineData("compacting")]
+    [InlineData(null)]
+    public void ToChatMessage_Status_PreservesProtocolAndSerializesData(string? status)
+    {
+        // Arrange
+        var message = StatusMessage(status);
+
+        // Act
+        var update = message.ToAgentRunResponseUpdate();
+        var chatMessage = message.ToChatMessage();
+
+        // Assert
+        Assert.Equal("status", message.Subtype);
+        Assert.True(message.Data.ContainsKey("status"));
+        Assert.Equal(status, message.Data["status"]?.ToString());
+        var text = Assert
+            .IsType<TextContent>(
+                Assert.Single(
+                    Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents
+                )
+            )
+            .Text;
+        Assert.Contains("status", text);
+        Assert.Equal(
+            text,
+            Assert
+                .IsType<TextContent>(
+                    Assert.Single(Assert.IsType<ChatMessage>(chatMessage).Contents)
+                )
+                .Text
+        );
+        Assert.Same(message, update.RawRepresentation);
+        Assert.Same(message.Data, update.AdditionalProperties!["systemData"]);
+        Assert.Equal(message.SessionId, update.AdditionalProperties["session_id"]);
+        var mapped = Assert.Single(new ClaudePartialMessageMapper().Map(message));
+        Assert.Contains("status", Assert.IsType<TextContent>(Assert.Single(mapped.Contents)).Text);
+    }
+
+    [Theory]
+    [InlineData("vcs_state_changed")]
+    [InlineData("future_unknown_event")]
+    public void ToChatMessage_SystemEvent_PreservesProtocolAndSerializesData(string subtype)
+    {
+        // Arrange
+        var message = VcsStateChangedMessage() with
+        {
+            Subtype = subtype,
+        };
+
+        // Act
+        var update = message.ToAgentRunResponseUpdate();
+        var chatMessage = message.ToChatMessage();
+
+        // Assert
+        Assert.Equal(subtype, message.Subtype);
+        Assert.Equal("commit", message.Data["kind"].ToString());
+        Assert.Equal("main", message.Data["branch"].ToString());
+        Assert.Equal("/workspace/project", message.Data["cwd"].ToString());
+        var text = Assert
+            .IsType<TextContent>(
+                Assert.Single(
+                    Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents
+                )
+            )
+            .Text;
+        Assert.Contains("commit", text);
+        Assert.Equal(
+            text,
+            Assert
+                .IsType<TextContent>(
+                    Assert.Single(Assert.IsType<ChatMessage>(chatMessage).Contents)
+                )
+                .Text
+        );
+        Assert.Same(message, update.RawRepresentation);
+        Assert.Same(message.Data, update.AdditionalProperties!["systemData"]);
+        Assert.Equal(message.SessionId, update.AdditionalProperties["session_id"]);
+        var mapped = Assert.Single(new ClaudePartialMessageMapper().Map(message));
+        Assert.Contains("commit", Assert.IsType<TextContent>(Assert.Single(mapped.Contents)).Text);
+    }
+
+    private static SystemMessage VcsStateChangedMessage() =>
+        Assert.IsType<SystemMessage>(
+            MessageParser.ParseMessage(
+                """
+                {
+                  "type": "system",
+                  "subtype": "vcs_state_changed",
+                  "kind": "commit",
+                  "branch": "main",
+                  "cwd": "/workspace/project",
+                  "session_id": "session-1",
+                  "uuid": "vcs-progress"
+                }
+                """
+            )
+        );
+
+    private static SystemMessage StatusMessage(string? status = "requesting") =>
+        Assert.IsType<SystemMessage>(
+            MessageParser.ParseMessage(
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        type = "system",
+                        subtype = "status",
+                        status,
+                        session_id = "session-1",
+                        uuid = "status-progress",
+                    }
+                )
+            )
+        );
+
+    private static SystemMessage ThinkingTokensMessage() =>
+        Assert.IsType<SystemMessage>(
+            MessageParser.ParseMessage(
+                """
+                {
+                  "type": "system",
+                  "subtype": "thinking_tokens",
+                  "estimated_tokens": 399,
+                  "estimated_tokens_delta": 2,
+                  "session_id": "session-1",
+                  "uuid": "thinking-progress"
+                }
+                """
+            )
+        );
 
     private static SystemMessage ApiRetrySystemMessage(int attempt = 1) =>
         new()
