@@ -105,6 +105,10 @@ internal static partial class IMessageExtension
                     }
                 );
             }
+            else if (resultMessage.StructuredOutput is { } output)
+            {
+                contents.Add(new TextContent(output.GetRawText()));
+            }
             else if (!string.IsNullOrWhiteSpace(result))
             {
                 var textContent = new TextContent(result);

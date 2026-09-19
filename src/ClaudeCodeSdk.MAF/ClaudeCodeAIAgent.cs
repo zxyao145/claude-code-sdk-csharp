@@ -291,6 +291,18 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
                     }
 
                     var message = enumerator.Current;
+                    if (
+                        message is ResultMessage { IsError: false, StructuredOutput: null } result
+                        && _options.ExtraArgs?.ContainsKey("json-schema") == true
+                    )
+                    {
+                        message = result with
+                        {
+                            IsError = true,
+                            Subtype = "error_missing_structured_output",
+                            Result = "Claude Code did not return the requested structured output.",
+                        };
+                    }
                     var mappedMessage = processor.Process(message);
                     if (mappedMessage.CompletedHistoryBatch is { } completedBatch)
                     {
