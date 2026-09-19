@@ -19,13 +19,12 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is SystemMessage systemMessage)
         {
-            AIContent content = string.Equals(
-                systemMessage.Subtype,
-                "api_retry",
-                StringComparison.Ordinal
-            )
-                ? new ErrorContent(GetApiRetryErrorMessage(systemMessage))
-                : new TextContent(JsonUtil.Serialize(systemMessage.Data));
+            AIContent content = systemMessage.Subtype switch
+            {
+                "api_retry" => new ErrorContent(GetApiRetryErrorMessage(systemMessage)),
+                // init, status, hook_*, task_* ...
+                _ => new TextContent(JsonUtil.Serialize(systemMessage.Data)),
+            };
 
             return new AgentResponseUpdate
             {
@@ -36,11 +35,14 @@ internal static partial class IMessageExtension
                 {
                     { "type", claudeMessage.Type.Value },
                     { "subtype", systemMessage.Subtype },
+                    { "session_id", systemMessage.SessionId },
+                    { "systemData", systemMessage.Data },
                     {
                         ModelNamePropertyName,
                         NormalizeModelName(GetSystemDataText(systemMessage.Data, "model"))
                     },
                 },
+                RawRepresentation = systemMessage,
                 Contents = [content],
             };
         }
@@ -104,6 +106,10 @@ internal static partial class IMessageExtension
                         },
                     }
                 );
+            }
+            else if (resultMessage.StructuredOutput is { } output)
+            {
+                contents.Add(new TextContent(output.GetRawText()));
             }
             else if (!string.IsNullOrWhiteSpace(result))
             {

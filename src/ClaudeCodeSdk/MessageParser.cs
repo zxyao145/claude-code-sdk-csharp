@@ -293,6 +293,9 @@ internal static class MessageParser
                 TotalCostUsd = GetOptionalDouble(msgData, "total_cost_usd"),
                 Usage = GetOptional<Usage>(msgData, "usage"),
                 Result = GetOptionalString(msgData, "result"),
+                StructuredOutput = msgData.TryGetProperty("structured_output", out var output)
+                    ? output.Clone()
+                    : null,
             };
 
             return result;

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ClaudeCodeSdk.Types;
@@ -37,4 +38,11 @@ public record ResultMessage : IMessage
 
     [JsonPropertyName("result")]
     public string? Result { get; init; }
+
+    /// <summary>
+    /// Validated JSON returned by the CLI when structured output is enabled.
+    /// A missing field is null; an explicit JSON null is preserved as a JsonElement.
+    /// </summary>
+    [JsonPropertyName("structured_output")]
+    public JsonElement? StructuredOutput { get; init; }
 }

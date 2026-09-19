@@ -264,6 +264,7 @@ public class MafErrorContentTests
             "ready",
             Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
         );
+        Assert.Equal("session-1", chatMessage.AdditionalProperties["session_id"]);
     }
 
     [Fact]
