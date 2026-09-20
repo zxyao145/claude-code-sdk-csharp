@@ -91,7 +91,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
     /// <summary>
     /// Receive messages from Claude as JSON dictionaries.
-    /// Automatically terminates when receiving "result" type message.
+    /// Terminates at a result with no pending delegated agents, or at an error result.
     /// </summary>
     public async IAsyncEnumerable<IMessage> ReceiveAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -100,31 +100,104 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         if (_stdout == null)
             throw new CLIConnectionException("Not connected");
 
-        while (!cancellationToken.IsCancellationRequested)
+        await foreach (
+            var message in ReadResponseAsync(_stdout, _controlProtocol, _logger, cancellationToken)
+        )
         {
-            var line = await _stdout.ReadLineAsync(cancellationToken);
-            _logger?.LogDebug("stdout ReadLine from process stdout:{line}", line);
+            yield return message;
+        }
+
+        await TryReadStderr(cancellationToken);
+    }
+
+    internal static async IAsyncEnumerable<IMessage> ReadResponseAsync(
+        TextReader stdout,
+        ControlProtocolHandler controlProtocol,
+        ILogger? logger = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        var pendingAgents = new HashSet<string>(StringComparer.Ordinal);
+        var deferredResult = false;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = await stdout.ReadLineAsync(cancellationToken);
+            logger?.LogDebug("stdout ReadLine from process stdout:{line}", line);
 
             if (line == null)
-                break;
+            {
+                if (deferredResult || pendingAgents.Count > 0)
+                    throw new ProcessException(
+                        "Claude Code exited before background agents produced a final result."
+                    );
+                yield break;
+            }
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
-            if (_controlProtocol.TryHandle(line, cancellationToken))
+            if (controlProtocol.TryHandle(line, cancellationToken))
                 continue;
 
-            var msg = MessageParser.ParseMessage(line, _logger);
+            var msg = MessageParser.ParseMessage(line, logger);
             if (msg == null)
                 continue;
 
+            if (msg is SystemMessage system)
+                TrackAgentTask(system, pendingAgents);
+
+            // Forward every result, but a parent turn's result does not end the run
+            // while delegated agents are still pending.
+            if (msg is ResultMessage result)
+            {
+                deferredResult = !result.IsError && pendingAgents.Count > 0;
+                msg = result with { IsIntermediate = deferredResult };
+            }
+
             yield return msg;
 
-            if (msg.Type == MessageType.Result)
+            if (msg is ResultMessage && !deferredResult)
+                yield break;
+        }
+    }
+
+    private static void TrackAgentTask(SystemMessage message, HashSet<string> pendingAgents)
+    {
+        if (
+            !message.Data.TryGetValue("task_id", out var idValue)
+            || idValue is not JsonElement { ValueKind: JsonValueKind.String } idElement
+            || string.IsNullOrEmpty(idElement.GetString())
+        )
+            return;
+
+        var taskId = idElement.GetString()!;
+        switch (message.Subtype)
+        {
+            case "task_started":
+                // Shells, monitors, teammates and remote agents may run indefinitely.
+                // Match the bounded task types waited on by the official Python SDK.
+                if (
+                    message.Data.TryGetValue("task_type", out var typeValue)
+                    && typeValue is JsonElement { ValueKind: JsonValueKind.String } typeElement
+                    && typeElement.GetString() is "local_agent" or "local_workflow"
+                )
+                    pendingAgents.Add(taskId);
+                break;
+            case "task_notification":
+                pendingAgents.Remove(taskId);
+                break;
+            case "task_updated":
+                if (
+                    message.Data.TryGetValue("patch", out var patchValue)
+                    && patchValue is JsonElement { ValueKind: JsonValueKind.Object } patch
+                    && patch.TryGetProperty("status", out var status)
+                    && status.ValueKind == JsonValueKind.String
+                    && status.GetString() is "completed" or "failed" or "stopped" or "killed"
+                )
+                    pendingAgents.Remove(taskId);
                 break;
         }
-
-        await TryReadStderr(cancellationToken);
     }
 
     private async Task TryReadStderr(CancellationToken cancellationToken = default)

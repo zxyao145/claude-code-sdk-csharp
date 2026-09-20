@@ -12,6 +12,10 @@ public record ResultMessage : IMessage
 
     public MessageType Type => MessageType.Result;
 
+    // Transport-local state: a result can end a turn while delegated agents are still running.
+    [JsonIgnore]
+    internal bool IsIntermediate { get; init; }
+
     [JsonPropertyName("subtype")]
     public required string Subtype { get; init; }
 
