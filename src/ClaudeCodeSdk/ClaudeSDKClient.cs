@@ -134,8 +134,8 @@ public class ClaudeSdkClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Receive messages until and including a ResultMessage, then automatically terminate.
-    /// Convenience method for single-response workflows.
+    /// Receive messages through the final ResultMessage after delegated agents settle, or an error result.
+    /// Intermediate results are forwarded; the process receive loop owns completion.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Async enumerable of messages ending with a ResultMessage</returns>
@@ -146,8 +146,6 @@ public class ClaudeSdkClient : IAsyncDisposable
         await foreach (var message in ReceiveMessagesAsync(cancellationToken))
         {
             yield return message;
-            if (message is ResultMessage)
-                yield break;
         }
     }
 

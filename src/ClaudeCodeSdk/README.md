@@ -700,13 +700,15 @@ finally
 
 The SDK uses automatic message termination:
 
+Delegated `local_agent` and `local_workflow` tasks are tracked through `task_started`, `task_notification`, and terminal `task_updated` events. All results, including intermediate results, are forwarded in order. Receiving an intermediate result must not stop enumeration; the stream ends after a result with no tracked agents pending (or an error). MAF requires structured output only on the final successful result, allowing intermediate results to contain plain text. Shells, monitors, teammates, and remote agents do not hold the response open. Cancellation still interrupts waiting; EOF while awaiting a final result throws `ProcessException`. This relies on CLI lifecycle events: it cannot detect a pending continuation if the CLI reports all tasks finished before emitting an earlier turn's result.
+
 1. **`ClaudeProcess.ReceiveAsync()`** continuously reads messages from the CLI
-2. When a `ResultMessage` (type="result") is received, the stream automatically terminates
+2. The stream terminates at a result with no pending delegated agents, or at an error result
 3. Both `ClaudeQuery` and `ClaudeSdkClient` rely on this behavior
-4. `ClaudeSdkClient.ReceiveResponseAsync()` provides convenience wrapper that yields until `ResultMessage`
+4. `ClaudeSdkClient.ReceiveResponseAsync()` forwards all messages through stream completion, including intermediate results
 
 ```csharp
-// This loop automatically terminates when ResultMessage is received
+// This loop forwards intermediate results and terminates at the run-ending result
 await foreach (var message in client.ReceiveResponseAsync())
 {
     // Process messages...

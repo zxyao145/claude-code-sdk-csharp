@@ -292,7 +292,13 @@ public class ClaudeCodeAIAgent : AIAgent, IDisposable, IAsyncDisposable
 
                     var message = enumerator.Current;
                     if (
-                        message is ResultMessage { IsError: false, StructuredOutput: null } result
+                        message
+                            is ResultMessage
+                            {
+                                IsError: false,
+                                IsIntermediate: false,
+                                StructuredOutput: null
+                            } result
                         && _options.ExtraArgs?.ContainsKey("json-schema") == true
                     )
                     {

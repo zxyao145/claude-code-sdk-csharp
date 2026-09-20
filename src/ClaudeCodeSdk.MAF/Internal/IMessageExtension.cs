@@ -132,7 +132,16 @@ internal static partial class IMessageExtension
                     AuthorName = AgentName,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        { "type", claudeMessage.Type.Value },
+                        // Intermediate results are assistant progress in chat presentation;
+                        // the raw SDK stream still exposes the original ResultMessage.
+                        // For example, background agent execution status notification.
+                        {
+                            "type",
+                            resultMessage.IsIntermediate
+                                ? MessageType.Assistant.Value
+                                : claudeMessage.Type.Value
+                        },
+                        { "isIntermediateResult", resultMessage.IsIntermediate },
                         { "subtype", resultMessage.Subtype },
                         { "totalCostUsd", resultMessage.TotalCostUsd },
                         { ModelNamePropertyName, string.Empty },

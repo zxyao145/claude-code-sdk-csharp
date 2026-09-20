@@ -83,9 +83,10 @@ Custom exceptions inherit from `ClaudeSDKException`:
 ## Key Implementation Details
 
 ### Message Streaming and Termination
-- `ClaudeProcess.ReceiveAsync()` automatically terminates when receiving a `ResultMessage` (type="result")
+- `ClaudeProcess.ReceiveAsync()` terminates at a result with no pending delegated agents, or at an error result
+- Delegated `local_agent` and `local_workflow` tasks are tracked through `task_started`, `task_notification`, and terminal `task_updated` events. All results, including intermediate results, are forwarded in order. Receiving an intermediate result must not stop enumeration; the stream ends after a result with no tracked agents pending (or an error). MAF requires structured output only on the final successful result, allowing intermediate results to contain plain text. Shells, monitors, teammates, and remote agents do not hold the response open. Cancellation still interrupts waiting; EOF while awaiting a final result throws `ProcessException`. This relies on CLI lifecycle events: it cannot detect a pending continuation if the CLI reports all tasks finished before emitting an earlier turn's result.
 - Both `ClaudeQuery` and `ClaudeSdkClient` rely on this automatic termination
-- `ClaudeSdkClient.ReceiveResponseAsync()` provides convenience method that yields until ResultMessage
+- `ClaudeSdkClient.ReceiveResponseAsync()` forwards all messages through stream completion, including intermediate results
 
 ### Message Parsing (`MessageParser`)
 - Converts JSON from CLI stdout into strongly-typed `IMessage` objects
