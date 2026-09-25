@@ -278,15 +278,22 @@ internal static partial class IMessageExtension
             return null;
         }
 
+        // Anthropic reports input_tokens as the uncached remainder only; cache reads and cache
+        // creations come separately. Microsoft.Extensions.AI counts cached input as part of
+        // InputTokenCount and defines CachedInputTokenCount as the tokens read from a cache.
+        long inputTokens =
+            (long)usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens;
+
         var usageDetails = new UsageDetails
         {
-            TotalTokenCount = usage.InputTokens + usage.OutputTokens,
-            InputTokenCount = usage.InputTokens,
+            TotalTokenCount = inputTokens + usage.OutputTokens,
+            InputTokenCount = inputTokens,
             OutputTokenCount = usage.OutputTokens,
-            CachedInputTokenCount = usage.CacheCreationInputTokens,
+            CachedInputTokenCount = usage.CacheReadInputTokens,
             AdditionalCounts = new AdditionalPropertiesDictionary<long>
             {
                 { "cacheReadInputTokens", usage.CacheReadInputTokens },
+                { "cacheCreationInputTokens", usage.CacheCreationInputTokens },
             },
         };
 
