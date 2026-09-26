@@ -29,26 +29,33 @@ internal sealed class ControlProtocolHandler
         JsonElement message;
         try
         {
-            using var document = JsonDocument.Parse(line);
-            message = document.RootElement.Clone();
+            message = JsonElement.Parse(line);
         }
         catch (JsonException)
         {
             return false;
         }
 
-        if (!message.TryGetProperty("type", out var typeElement))
+        return TryHandle(message, cancellationToken);
+    }
+
+    /// <param name="message">A parsed line that owns its memory; a request outlives this call.</param>
+    public bool TryHandle(JsonElement message, CancellationToken cancellationToken)
+    {
+        if (
+            message.ValueKind != JsonValueKind.Object
+            || !message.TryGetProperty("type"u8, out var typeElement)
+            || typeElement.ValueKind != JsonValueKind.String
+        )
         {
             return false;
         }
 
-        return typeElement.GetString() switch
-        {
-            "control_request" => StartRequest(message, cancellationToken),
-            "control_cancel_request" => CancelRequest(message),
-            "control_response" => true,
-            _ => false,
-        };
+        if (typeElement.ValueEquals("control_request"u8))
+            return StartRequest(message, cancellationToken);
+        if (typeElement.ValueEquals("control_cancel_request"u8))
+            return CancelRequest(message);
+        return typeElement.ValueEquals("control_response"u8);
     }
 
     public void CancelAll()

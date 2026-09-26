@@ -18,28 +18,40 @@ internal static class MessageParser
     /// <param name="logger">Optional logger for debugging</param>
     /// <returns>Parsed Message object</returns>
     /// <exception cref="MessageParseException">If parsing fails or message type is unrecognized</exception>
-    public static IMessage? ParseMessage(string line, ILogger? logger = null)
+    public static IMessage? ParseMessage(string line, ILogger? logger = null) =>
+        ParseLine(line, logger) is { } jsonLine ? ParseMessage(jsonLine, logger) : null;
+
+    /// <summary>
+    /// Parse one CLI output line once, so the control protocol and the message parser share it.
+    /// </summary>
+    /// <returns>The line's object, or null for a JSON null line. It owns its memory, so parsed
+    /// messages may keep its sub-elements without cloning.</returns>
+    /// <exception cref="CLIJsonDecodeException">If the line is not a JSON object or null</exception>
+    internal static JsonElement? ParseLine(string line, ILogger? logger = null)
     {
-        Dictionary<string, object>? data;
+        JsonElement jsonLine;
         try
         {
-            data = JsonUtil.Deserialize<Dictionary<string, object>>(line);
+            jsonLine = JsonElement.Parse(line);
         }
         catch (JsonException ex)
         {
             logger?.LogError(ex, "JSON parse error: {Line}", line);
             throw new CLIJsonDecodeException(line, ex);
         }
-        if (data == null)
+
+        return jsonLine.ValueKind switch
         {
-            return null;
-        }
-        //var jsonElement = JsonSerializer.SerializeToElement(line, JsonUtil.SNAKECASELOWER_OPTIONS);
-        var jsonLineElement = JsonUtil.SnakeCaseSerializeToElement(data);
-        return ParseMessage(jsonLineElement, logger);
+            JsonValueKind.Object => jsonLine,
+            JsonValueKind.Null => null,
+            _ => throw new CLIJsonDecodeException(
+                line,
+                new JsonException($"Expected a JSON object, got {jsonLine.ValueKind}.")
+            ),
+        };
     }
 
-    private static IMessage? ParseMessage(JsonElement jsonLine, ILogger? logger = null)
+    internal static IMessage? ParseMessage(JsonElement jsonLine, ILogger? logger = null)
     {
         if (jsonLine.ValueKind != JsonValueKind.Object)
         {
@@ -229,7 +241,7 @@ internal static class MessageParser
                 Id = GetRequiredString(msgData, UUID),
                 SessionId = GetRequiredString(msgData, "session_id"),
                 ParentToolUseId = GetOptionalString(msgData, "parent_tool_use_id"),
-                Event = eventElement.Clone(),
+                Event = eventElement,
             };
         }
         catch (Exception ex) when (ex is not MessageParseException)
@@ -258,9 +270,13 @@ internal static class MessageParser
                 );
             }
 
-            var dataDict = JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(
-                msgData.GetRawText()
-            );
+            // Same values as Deserialize<Dictionary<string, object>>: JSON null stays a null entry.
+            var dataDict = new Dictionary<string, object>();
+            foreach (var property in msgData.EnumerateObject())
+            {
+                dataDict[property.Name] =
+                    property.Value.ValueKind == JsonValueKind.Null ? null! : property.Value;
+            }
             dataDict.Remove("subtype");
 
             return new SystemMessage
@@ -294,7 +310,7 @@ internal static class MessageParser
                 Usage = GetOptional<Usage>(msgData, "usage"),
                 Result = GetOptionalString(msgData, "result"),
                 StructuredOutput = msgData.TryGetProperty("structured_output", out var output)
-                    ? output.Clone()
+                    ? output
                     : null,
             };
 
@@ -406,11 +422,13 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            if (prop.ValueKind == JsonValueKind.String)
+            // Same shape as Deserialize<object>: a string, null, or the JsonElement itself.
+            return prop.ValueKind switch
             {
-                return prop.GetString();
-            }
-            return JsonUtil.SnakeCaseDeserialize<object>(prop.GetRawText());
+                JsonValueKind.String => prop.GetString(),
+                JsonValueKind.Null => null,
+                _ => prop,
+            };
         }
         return null;
     }
@@ -422,7 +440,7 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return JsonUtil.SnakeCaseDeserialize<Dictionary<string, object>>(prop.GetRawText())!;
+            return prop.Deserialize<Dictionary<string, object>>(JsonUtil.SNAKECASELOWER_OPTIONS)!;
         }
         throw new MessageParseException($"Missing required property: {propertyName}", element);
     }

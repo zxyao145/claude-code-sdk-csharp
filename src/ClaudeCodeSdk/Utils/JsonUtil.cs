@@ -44,14 +44,4 @@ internal static class JsonUtil
     {
         return JsonSerializer.Deserialize<T>(value, CAMELCASE_OPTIONS);
     }
-
-    public static JsonElement SnakeCaseSerializeToElement<TValue>(TValue value)
-    {
-        return JsonSerializer.SerializeToElement(value, SNAKECASELOWER_OPTIONS);
-    }
-
-    public static TValue SnakeCaseDeserialize<TValue>(string text)
-    {
-        return JsonSerializer.Deserialize<TValue>(text, SNAKECASELOWER_OPTIONS)!;
-    }
 }

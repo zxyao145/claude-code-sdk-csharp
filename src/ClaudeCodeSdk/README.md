@@ -570,6 +570,7 @@ sequenceDiagram
     P->>CLI: write user message to stdin
     loop until result message
         CLI-->>P: JSON line on stdout
+        P->>P: MessageParser.ParseLine() (parsed once, shared below)
         P->>P: ControlProtocolHandler.TryHandle()
         P->>P: MessageParser.ParseMessage()
         P-->>Q: yield IMessage
@@ -617,7 +618,7 @@ sequenceDiagram
     participant App as CanUseTool callback
 
     CLI-->>P: control_request (subtype: can_use_tool)
-    P->>CP: TryHandle(line)
+    P->>CP: TryHandle(parsed line)
     CP->>CP: StartRequest, track pending by request_id
     CP->>App: await CanUseTool(toolName, input, context)
     App-->>CP: PermissionResultAllow / PermissionResultDeny
