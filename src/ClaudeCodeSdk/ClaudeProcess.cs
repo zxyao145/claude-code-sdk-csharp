@@ -356,7 +356,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 throw new CLIConnectionException("Not connected");
 
             // Bypass the writer so a large prompt (e.g. a base64 image) never becomes a string.
-            // Mixing is safe: the writer flushes after every line and wrote its preamble at start.
+            // Mixing is safe: the writer flushes after every line and has no preamble to write.
             await WriteJsonLineToAsync(_stdin.BaseStream, message, cancellationToken);
         }
         finally
@@ -426,7 +426,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            StandardInputEncoding = Encoding.UTF8,
+            // UTF-8 without a BOM. With Encoding.UTF8, Process.Start writes the BOM to stdin at
+            // once, which fails with EPIPE if the CLI has already exited and hides its stderr.
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };

@@ -119,6 +119,46 @@ public class ProcessPipeTests
     }
 
     [Fact]
+    public async Task StartAsync_Prompt_StdinStartsWithJsonNotBom()
+    {
+        // Encoding.UTF8 makes Process.Start write a BOM to stdin before any prompt, which fails
+        // with EPIPE when the CLI has already exited. Stdin must start with the first JSON line.
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The fake CLI is a POSIX shell script.");
+
+        // Arrange
+        // The fake CLI reports the first three bytes it reads from stdin as the result text.
+        var cli = CreateFakeCli(
+            """
+            first=$(head -c 3 | od -An -tx1 | tr -d ' \n')
+            echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"duration_api_ms":1,"num_turns":1,"session_id":"session","uuid":"result-1","result":"'"$first"'"}'
+            sleep 5
+            """
+        );
+        try
+        {
+            await using var process = new ClaudeProcess(new ClaudeCodeOptions(), cli);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                TestContext.Current.CancellationToken
+            );
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+            // Act
+            await process.StartAsync("hello", timeout.Token);
+            var messages = new List<IMessage>();
+            await foreach (var message in process.ReceiveAsync(timeout.Token))
+                messages.Add(message);
+
+            // Assert
+            // 7b2274 is `{"t`, the start of {"type":"user",...}; efbbbf would be a UTF-8 BOM.
+            Assert.Equal("7b2274", Assert.IsType<ResultMessage>(Assert.Single(messages)).Result);
+        }
+        finally
+        {
+            File.Delete(cli);
+        }
+    }
+
+    [Fact]
     public async Task WriteJsonLineToAsync_ImageBytes_MatchesSerializedBase64Line()
     {
         // Arrange
