@@ -137,10 +137,14 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
-            if (controlProtocol.TryHandle(line, cancellationToken))
+            // Parse once: the control protocol and the message parser share this element.
+            if (MessageParser.ParseLine(line, logger) is not { } jsonLine)
                 continue;
 
-            var msg = MessageParser.ParseMessage(line, logger);
+            if (controlProtocol.TryHandle(jsonLine, cancellationToken))
+                continue;
+
+            var msg = MessageParser.ParseMessage(jsonLine, logger);
             if (msg == null)
                 continue;
 
@@ -167,11 +171,10 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         if (
             !message.Data.TryGetValue("task_id", out var idValue)
             || idValue is not JsonElement { ValueKind: JsonValueKind.String } idElement
-            || string.IsNullOrEmpty(idElement.GetString())
+            || idElement.GetString() is not { Length: > 0 } taskId
         )
             return;
 
-        var taskId = idElement.GetString()!;
         switch (message.Subtype)
         {
             case "task_started":

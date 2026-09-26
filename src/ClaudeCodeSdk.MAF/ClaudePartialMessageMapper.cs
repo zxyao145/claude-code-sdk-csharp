@@ -88,21 +88,28 @@ internal sealed class ClaudePartialMessageMapper
 
     private AgentResponseUpdate? MapStreamEvent(StreamEvent streamEvent)
     {
-        if (!TryGetString(streamEvent.Event, "type", out var eventType))
+        // Runs once per streamed token: compare UTF-8 in place rather than allocating the type.
+        if (
+            !streamEvent.Event.TryGetProperty("type"u8, out var eventType)
+            || eventType.ValueKind != JsonValueKind.String
+        )
         {
             return null;
         }
 
-        return eventType switch
-        {
-            "message_start" => StartMessage(streamEvent),
-            "content_block_start" => StartContentBlock(streamEvent),
-            "content_block_delta" => AppendContentBlockDelta(streamEvent),
-            "content_block_stop" => StopContentBlock(streamEvent),
-            "message_delta" => MapMessageDelta(streamEvent),
-            "message_stop" => StopMessage(streamEvent),
-            _ => null,
-        };
+        if (eventType.ValueEquals("content_block_delta"u8))
+            return AppendContentBlockDelta(streamEvent);
+        if (eventType.ValueEquals("message_start"u8))
+            return StartMessage(streamEvent);
+        if (eventType.ValueEquals("content_block_start"u8))
+            return StartContentBlock(streamEvent);
+        if (eventType.ValueEquals("content_block_stop"u8))
+            return StopContentBlock(streamEvent);
+        if (eventType.ValueEquals("message_delta"u8))
+            return MapMessageDelta(streamEvent);
+        if (eventType.ValueEquals("message_stop"u8))
+            return StopMessage(streamEvent);
+        return null;
     }
 
     private AgentResponseUpdate? StartMessage(StreamEvent streamEvent)
