@@ -104,6 +104,7 @@ Custom exceptions inherit from `ClaudeSDKException`:
 - All process-managing classes implement `IAsyncDisposable`
 - `ClaudeProcess` handles subprocess lifecycle (start, kill, cleanup)
 - Automatically cleans up stdin/stdout streams and process handles
+- `stderr` is drained from process start (last 64K chars kept for `ProcessException`); an unread pipe fills up and blocks the CLI, stalling stdout. At stdout EOF, the exit is awaited briefly (up to 1s) before stderr is checked, since `HasExited` can lag the EOF
 - Use `await using` for automatic cleanup
 
 ### Environment Variables

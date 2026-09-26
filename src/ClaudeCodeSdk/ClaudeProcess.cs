@@ -13,6 +13,11 @@ namespace ClaudeCodeSdk;
 /// </summary>
 internal sealed class ClaudeProcess : IAsyncDisposable
 {
+    // Process gives stdout a 4KB buffer; 64KB reads large tool results in far fewer pipe reads.
+    private const int StdoutBufferSize = 64 * 1024;
+    private const int StderrTailChars = 64 * 1024;
+    private static readonly byte[] NewLine = [(byte)'\n'];
+
     private readonly ClaudeCodeOptions _options;
     private readonly ILogger? _logger;
     private readonly string _cliPath;
@@ -23,6 +28,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     private StreamWriter? _stdin;
     private StreamReader? _stdout;
     private StreamReader? _stderr;
+    private Task<string>? _stderrDrain;
     private bool _disposed;
 
     public ClaudeProcess(ClaudeCodeOptions options, string? cliPath = null, ILogger? logger = null)
@@ -55,8 +61,16 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 throw new ProcessException("Failed to start Claude CLI process");
 
             _stdin = _process.StandardInput;
-            _stdout = _process.StandardOutput;
+            _stdout = new StreamReader(
+                _process.StandardOutput.BaseStream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true,
+                StdoutBufferSize
+            );
             _stderr = _process.StandardError;
+            // An unread redirected pipe fills up and blocks the CLI's writes, which stalls stdout
+            // too. Drain stderr for the whole process lifetime, keeping its tail for error reports.
+            _stderrDrain = DrainAsync(_stderr, StderrTailChars, _logger);
 
             if (prompt != null)
                 await SendInitialPromptAsync(prompt, cancellationToken);
@@ -83,9 +97,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     {
         foreach (var message in messages)
         {
-            var json = JsonUtil.Serialize(message);
-            _logger?.LogDebug("stdin WriteLine:{line}", json);
-            await WriteLineAsync(json, cancellationToken);
+            if (_logger?.IsEnabled(LogLevel.Debug) == true)
+                _logger.LogDebug("stdin WriteLine:{line}", JsonUtil.Serialize(message));
+            await WriteJsonLineAsync(message, cancellationToken);
         }
     }
 
@@ -100,13 +114,18 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         if (_stdout == null)
             throw new CLIConnectionException("Not connected");
 
+        IMessage? last = null;
         await foreach (
             var message in ReadResponseAsync(_stdout, _controlProtocol, _logger, cancellationToken)
         )
         {
+            last = message;
             yield return message;
         }
 
+        // A final result leaves the CLI running for the next turn; any other end is stdout EOF.
+        if (last is not ResultMessage { IsIntermediate: false })
+            await WaitForExitAfterEofAsync(cancellationToken);
         await TryReadStderr(cancellationToken);
     }
 
@@ -203,19 +222,38 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         }
     }
 
+    private async Task WaitForExitAfterEofAsync(CancellationToken cancellationToken)
+    {
+        if (_process == null)
+            return;
+
+        // Stdout closes as the CLI exits, but the exit is observed asynchronously. Wait briefly so
+        // TryReadStderr sees it and reports the failure; a CLI that keeps running is left alone.
+        try
+        {
+            await _process
+                .WaitForExitAsync(cancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            _logger?.LogDebug("Claude CLI closed stdout but has not exited.");
+        }
+    }
+
     private async Task TryReadStderr(CancellationToken cancellationToken = default)
     {
-        if (_stderr != null)
+        if (_stderrDrain != null)
         {
-            // ReadToEndAsync waits for EOF. For long-lived processes we should only drain stderr
+            // The drain completes at EOF. For long-lived processes we should only report stderr
             // when the process has exited, otherwise this can block normal multi-turn flows.
             if (_process?.HasExited != true)
             {
-                _logger?.LogDebug("Skipping stderr drain because process is still running.");
+                _logger?.LogDebug("Skipping stderr check because process is still running.");
                 return;
             }
 
-            var error = await _stderr.ReadToEndAsync(cancellationToken);
+            var error = await _stderrDrain.WaitAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(error))
             {
                 _logger?.LogDebug("No error output from process stderr.");
@@ -274,8 +312,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                         ["session_id"] = "default",
                     };
 
-                    var json = JsonUtil.Serialize(message);
-                    await WriteLineAsync(json, cancellationToken);
+                    await WriteJsonLineAsync(message, cancellationToken);
                     break;
                 }
 
@@ -283,8 +320,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 {
                     await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
                     {
-                        var json = JsonUtil.Serialize(message);
-                        await WriteLineAsync(json, cancellationToken);
+                        await WriteJsonLineAsync(message, cancellationToken);
                     }
                     break;
                 }
@@ -308,6 +344,76 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         }
     }
 
+    private async Task WriteJsonLineAsync(
+        Dictionary<string, object> message,
+        CancellationToken cancellationToken
+    )
+    {
+        await _stdinLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_stdin == null)
+                throw new CLIConnectionException("Not connected");
+
+            // Bypass the writer so a large prompt (e.g. a base64 image) never becomes a string.
+            // Mixing is safe: the writer flushes after every line and has no preamble to write.
+            await WriteJsonLineToAsync(_stdin.BaseStream, message, cancellationToken);
+        }
+        finally
+        {
+            _stdinLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Write a message as one JSON line: the UTF-8 bytes of <see cref="JsonUtil.Serialize"/> plus '\n'.
+    /// </summary>
+    internal static async Task WriteJsonLineToAsync(
+        Stream stream,
+        Dictionary<string, object> message,
+        CancellationToken cancellationToken
+    )
+    {
+        await JsonSerializer.SerializeAsync(
+            stream,
+            message,
+            JsonUtil.CAMELCASE_OPTIONS,
+            cancellationToken
+        );
+        await stream.WriteAsync(NewLine, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Read a stream to EOF, keeping at most its last <paramref name="maxChars"/> characters.
+    /// </summary>
+    internal static async Task<string> DrainAsync(
+        TextReader reader,
+        int maxChars,
+        ILogger? logger = null
+    )
+    {
+        var tail = new StringBuilder();
+        var buffer = new char[4096];
+        try
+        {
+            int read;
+            while ((read = await reader.ReadAsync(buffer).ConfigureAwait(false)) > 0)
+            {
+                tail.Append(buffer, 0, read);
+                if (tail.Length > maxChars)
+                    tail.Remove(0, tail.Length - maxChars);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Cleanup disposes the reader, which may interrupt a pending read.
+            logger?.LogDebug(ex, "Stopped draining stderr.");
+        }
+
+        return tail.ToString();
+    }
+
     private ProcessStartInfo BuildStartInfo(string fileName, IReadOnlyList<string> arguments)
     {
         var workingDir = _options.WorkingDirectory ?? Directory.GetCurrentDirectory();
@@ -320,7 +426,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            StandardInputEncoding = Encoding.UTF8,
+            // UTF-8 without a BOM. With Encoding.UTF8, Process.Start writes the BOM to stdin at
+            // once, which fails with EPIPE if the CLI has already exited and hides its stderr.
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
@@ -466,6 +574,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
         _stderr?.Dispose();
         _stderr = null;
+        _stderrDrain = null;
     }
 
     public async ValueTask DisposeAsync()

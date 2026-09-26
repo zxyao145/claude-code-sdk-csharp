@@ -34,7 +34,9 @@ internal static class ClaudeMafPromptBuilder
                             {
                                 ["type"] = "base64",
                                 ["media_type"] = data.MediaType,
-                                ["data"] = Convert.ToBase64String(data.Data.Span),
+                                // System.Text.Json writes ReadOnlyMemory<byte> as a base64 string,
+                                // so this is still base64, just without an intermediate string.
+                                ["data"] = data.Data,
                             },
                         }
                     );
