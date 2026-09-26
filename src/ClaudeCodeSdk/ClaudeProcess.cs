@@ -13,6 +13,8 @@ namespace ClaudeCodeSdk;
 /// </summary>
 internal sealed class ClaudeProcess : IAsyncDisposable
 {
+    private const int StderrTailChars = 64 * 1024;
+
     private readonly ClaudeCodeOptions _options;
     private readonly ILogger? _logger;
     private readonly string _cliPath;
@@ -23,6 +25,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     private StreamWriter? _stdin;
     private StreamReader? _stdout;
     private StreamReader? _stderr;
+    private Task<string>? _stderrDrain;
     private bool _disposed;
 
     public ClaudeProcess(ClaudeCodeOptions options, string? cliPath = null, ILogger? logger = null)
@@ -57,6 +60,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
             _stdin = _process.StandardInput;
             _stdout = _process.StandardOutput;
             _stderr = _process.StandardError;
+            // An unread redirected pipe fills up and blocks the CLI's writes, which stalls stdout
+            // too. Drain stderr for the whole process lifetime, keeping its tail for error reports.
+            _stderrDrain = DrainAsync(_stderr, StderrTailChars, _logger);
 
             if (prompt != null)
                 await SendInitialPromptAsync(prompt, cancellationToken);
@@ -100,13 +106,18 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         if (_stdout == null)
             throw new CLIConnectionException("Not connected");
 
+        IMessage? last = null;
         await foreach (
             var message in ReadResponseAsync(_stdout, _controlProtocol, _logger, cancellationToken)
         )
         {
+            last = message;
             yield return message;
         }
 
+        // A final result leaves the CLI running for the next turn; any other end is stdout EOF.
+        if (last is not ResultMessage { IsIntermediate: false })
+            await WaitForExitAfterEofAsync(cancellationToken);
         await TryReadStderr(cancellationToken);
     }
 
@@ -203,19 +214,38 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         }
     }
 
+    private async Task WaitForExitAfterEofAsync(CancellationToken cancellationToken)
+    {
+        if (_process == null)
+            return;
+
+        // Stdout closes as the CLI exits, but the exit is observed asynchronously. Wait briefly so
+        // TryReadStderr sees it and reports the failure; a CLI that keeps running is left alone.
+        try
+        {
+            await _process
+                .WaitForExitAsync(cancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            _logger?.LogDebug("Claude CLI closed stdout but has not exited.");
+        }
+    }
+
     private async Task TryReadStderr(CancellationToken cancellationToken = default)
     {
-        if (_stderr != null)
+        if (_stderrDrain != null)
         {
-            // ReadToEndAsync waits for EOF. For long-lived processes we should only drain stderr
+            // The drain completes at EOF. For long-lived processes we should only report stderr
             // when the process has exited, otherwise this can block normal multi-turn flows.
             if (_process?.HasExited != true)
             {
-                _logger?.LogDebug("Skipping stderr drain because process is still running.");
+                _logger?.LogDebug("Skipping stderr check because process is still running.");
                 return;
             }
 
-            var error = await _stderr.ReadToEndAsync(cancellationToken);
+            var error = await _stderrDrain.WaitAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(error))
             {
                 _logger?.LogDebug("No error output from process stderr.");
@@ -306,6 +336,36 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         {
             _stdinLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Read a stream to EOF, keeping at most its last <paramref name="maxChars"/> characters.
+    /// </summary>
+    internal static async Task<string> DrainAsync(
+        TextReader reader,
+        int maxChars,
+        ILogger? logger = null
+    )
+    {
+        var tail = new StringBuilder();
+        var buffer = new char[4096];
+        try
+        {
+            int read;
+            while ((read = await reader.ReadAsync(buffer).ConfigureAwait(false)) > 0)
+            {
+                tail.Append(buffer, 0, read);
+                if (tail.Length > maxChars)
+                    tail.Remove(0, tail.Length - maxChars);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Cleanup disposes the reader, which may interrupt a pending read.
+            logger?.LogDebug(ex, "Stopped draining stderr.");
+        }
+
+        return tail.ToString();
     }
 
     private ProcessStartInfo BuildStartInfo(string fileName, IReadOnlyList<string> arguments)
@@ -466,6 +526,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
 
         _stderr?.Dispose();
         _stderr = null;
+        _stderrDrain = null;
     }
 
     public async ValueTask DisposeAsync()

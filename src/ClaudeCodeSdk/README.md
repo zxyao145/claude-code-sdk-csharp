@@ -516,6 +516,8 @@ flowchart TB
 - **`ClaudeProcess`** - Unified subprocess manager
   - Owns the Claude Code CLI lifecycle (discovery, start, communication, cleanup)
   - Writes JSON lines to `stdin` and reads JSON lines from `stdout`
+  - Drains `stderr` for the whole process lifetime, keeping its tail for error reports, so a full
+    pipe cannot block the CLI
   - Routes stdout lines through `ControlProtocolHandler` before `MessageParser`
   - Automatic CLI discovery via `CommandUtil`
   - Shared by both `ClaudeQuery` and `ClaudeSdkClient`
