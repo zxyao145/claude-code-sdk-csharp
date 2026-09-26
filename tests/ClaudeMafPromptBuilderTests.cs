@@ -1,4 +1,5 @@
 using ClaudeCodeSdk.MAF;
+using ClaudeCodeSdk.Utils;
 using Microsoft.Extensions.AI;
 using Xunit;
 
@@ -32,7 +33,7 @@ public class ClaudeMafPromptBuilderTests
         Assert.Equal("image", image["type"]);
         Assert.Equal("base64", source["type"]);
         Assert.Equal("image/png", source["media_type"]);
-        Assert.Equal("AQID", source["data"]);
+        Assert.Equal("\"AQID\"", JsonUtil.Serialize(source["data"]));
         Assert.Equal("text", blocks[1]["type"]);
         Assert.Equal("describe this", blocks[1]["text"]);
     }

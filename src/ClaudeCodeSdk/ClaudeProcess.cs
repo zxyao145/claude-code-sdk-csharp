@@ -13,7 +13,10 @@ namespace ClaudeCodeSdk;
 /// </summary>
 internal sealed class ClaudeProcess : IAsyncDisposable
 {
+    // Process gives stdout a 4KB buffer; 64KB reads large tool results in far fewer pipe reads.
+    private const int StdoutBufferSize = 64 * 1024;
     private const int StderrTailChars = 64 * 1024;
+    private static readonly byte[] NewLine = [(byte)'\n'];
 
     private readonly ClaudeCodeOptions _options;
     private readonly ILogger? _logger;
@@ -58,7 +61,12 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 throw new ProcessException("Failed to start Claude CLI process");
 
             _stdin = _process.StandardInput;
-            _stdout = _process.StandardOutput;
+            _stdout = new StreamReader(
+                _process.StandardOutput.BaseStream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true,
+                StdoutBufferSize
+            );
             _stderr = _process.StandardError;
             // An unread redirected pipe fills up and blocks the CLI's writes, which stalls stdout
             // too. Drain stderr for the whole process lifetime, keeping its tail for error reports.
@@ -89,9 +97,9 @@ internal sealed class ClaudeProcess : IAsyncDisposable
     {
         foreach (var message in messages)
         {
-            var json = JsonUtil.Serialize(message);
-            _logger?.LogDebug("stdin WriteLine:{line}", json);
-            await WriteLineAsync(json, cancellationToken);
+            if (_logger?.IsEnabled(LogLevel.Debug) == true)
+                _logger.LogDebug("stdin WriteLine:{line}", JsonUtil.Serialize(message));
+            await WriteJsonLineAsync(message, cancellationToken);
         }
     }
 
@@ -304,8 +312,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                         ["session_id"] = "default",
                     };
 
-                    var json = JsonUtil.Serialize(message);
-                    await WriteLineAsync(json, cancellationToken);
+                    await WriteJsonLineAsync(message, cancellationToken);
                     break;
                 }
 
@@ -313,8 +320,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 {
                     await foreach (var message in asyncEnumerable.WithCancellation(cancellationToken))
                     {
-                        var json = JsonUtil.Serialize(message);
-                        await WriteLineAsync(json, cancellationToken);
+                        await WriteJsonLineAsync(message, cancellationToken);
                     }
                     break;
                 }
@@ -336,6 +342,46 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         {
             _stdinLock.Release();
         }
+    }
+
+    private async Task WriteJsonLineAsync(
+        Dictionary<string, object> message,
+        CancellationToken cancellationToken
+    )
+    {
+        await _stdinLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_stdin == null)
+                throw new CLIConnectionException("Not connected");
+
+            // Bypass the writer so a large prompt (e.g. a base64 image) never becomes a string.
+            // Mixing is safe: the writer flushes after every line and wrote its preamble at start.
+            await WriteJsonLineToAsync(_stdin.BaseStream, message, cancellationToken);
+        }
+        finally
+        {
+            _stdinLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Write a message as one JSON line: the UTF-8 bytes of <see cref="JsonUtil.Serialize"/> plus '\n'.
+    /// </summary>
+    internal static async Task WriteJsonLineToAsync(
+        Stream stream,
+        Dictionary<string, object> message,
+        CancellationToken cancellationToken
+    )
+    {
+        await JsonSerializer.SerializeAsync(
+            stream,
+            message,
+            JsonUtil.CAMELCASE_OPTIONS,
+            cancellationToken
+        );
+        await stream.WriteAsync(NewLine, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
     }
 
     /// <summary>

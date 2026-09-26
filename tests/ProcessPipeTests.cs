@@ -1,5 +1,7 @@
+using System.Text;
 using ClaudeCodeSdk.Exceptions;
 using ClaudeCodeSdk.Types;
+using ClaudeCodeSdk.Utils;
 using Xunit;
 
 namespace ClaudeCodeSdk.Tests;
@@ -115,6 +117,51 @@ public class ProcessPipeTests
             File.Delete(cli);
         }
     }
+
+    [Fact]
+    public async Task WriteJsonLineToAsync_ImageBytes_MatchesSerializedBase64Line()
+    {
+        // Arrange
+        byte[] image = [1, 2, 3, 250];
+        var expected = JsonUtil.Serialize(ImagePrompt(Convert.ToBase64String(image))) + "\n";
+        using var stream = new MemoryStream();
+
+        // Act
+        await ClaudeProcess.WriteJsonLineToAsync(
+            stream,
+            ImagePrompt((ReadOnlyMemory<byte>)image),
+            TestContext.Current.CancellationToken
+        );
+
+        // Assert
+        Assert.Equal(expected, Encoding.UTF8.GetString(stream.ToArray()));
+    }
+
+    private static Dictionary<string, object> ImagePrompt(object data) =>
+        new()
+        {
+            ["type"] = "user",
+            ["message"] = new Dictionary<string, object>
+            {
+                ["role"] = "user",
+                ["content"] = new List<Dictionary<string, object>>
+                {
+                    new()
+                    {
+                        ["type"] = "image",
+                        ["source"] = new Dictionary<string, object>
+                        {
+                            ["type"] = "base64",
+                            ["media_type"] = "image/png",
+                            ["data"] = data,
+                        },
+                    },
+                    new() { ["type"] = "text", ["text"] = "描述 <this> & \"that\"" },
+                },
+            },
+            ["parent_tool_use_id"] = null!,
+            ["session_id"] = "session-1",
+        };
 
     private static string CreateFakeCli(string script)
     {
