@@ -1174,31 +1174,15 @@ public class PartialMessageStreamingTests
         Assert.Equal("thinking_tokens", message.Subtype);
         Assert.Equal("399", message.Data["estimated_tokens"].ToString());
         Assert.Equal("2", message.Data["estimated_tokens_delta"].ToString());
-        var text = Assert
-            .IsType<TextContent>(
-                Assert.Single(
-                    Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents
-                )
-            )
-            .Text;
-        Assert.Contains("estimated_tokens", text);
-        Assert.Contains("399", text);
-        Assert.Equal(
-            text,
-            Assert
-                .IsType<TextContent>(
-                    Assert.Single(Assert.IsType<ChatMessage>(chatMessage).Contents)
-                )
-                .Text
-        );
+        // The system data is already exposed via AdditionalProperties["systemData"], so it is not
+        // duplicated as a TextContent.
+        Assert.Empty(Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents);
+        Assert.Empty(Assert.IsType<ChatMessage>(chatMessage).Contents);
         Assert.Same(message, update.RawRepresentation);
         Assert.Same(message.Data, update.AdditionalProperties!["systemData"]);
         Assert.Equal(message.SessionId, update.AdditionalProperties["session_id"]);
         var mapped = Assert.Single(new ClaudePartialMessageMapper().Map(message));
-        Assert.Contains(
-            "estimated_tokens",
-            Assert.IsType<TextContent>(Assert.Single(mapped.Contents)).Text
-        );
+        Assert.Empty(mapped.Contents);
     }
 
     [Fact]
@@ -1253,7 +1237,7 @@ public class PartialMessageStreamingTests
             {
                 Assert.Equal(ChatRole.System, update.Role);
                 Assert.IsType<SystemMessage>(update.RawRepresentation);
-                Assert.IsType<TextContent>(Assert.Single(update.Contents));
+                Assert.Empty(update.Contents);
             }
         );
 
@@ -1284,10 +1268,13 @@ public class PartialMessageStreamingTests
         var update = Assert.Single(mapped.Updates);
         Assert.Equal(messageId, update.MessageId);
         Assert.Equal(ChatRole.System, update.Role);
-        Assert.Contains(
-            expectedDataKey,
-            Assert.IsType<TextContent>(Assert.Single(update.Contents)).Text
+        // The system data is already exposed via AdditionalProperties["systemData"], so it is not
+        // duplicated as a TextContent.
+        Assert.Empty(update.Contents);
+        var systemData = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(
+            update.AdditionalProperties!["systemData"]
         );
+        Assert.Contains(expectedDataKey, JsonUtil.Serialize(systemData));
         Assert.Null(mapped.CompletedHistoryBatch);
     }
 
@@ -1308,27 +1295,15 @@ public class PartialMessageStreamingTests
         Assert.Equal("status", message.Subtype);
         Assert.True(message.Data.ContainsKey("status"));
         Assert.Equal(status, message.Data["status"]?.ToString());
-        var text = Assert
-            .IsType<TextContent>(
-                Assert.Single(
-                    Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents
-                )
-            )
-            .Text;
-        Assert.Contains("status", text);
-        Assert.Equal(
-            text,
-            Assert
-                .IsType<TextContent>(
-                    Assert.Single(Assert.IsType<ChatMessage>(chatMessage).Contents)
-                )
-                .Text
-        );
+        // The system data is already exposed via AdditionalProperties["systemData"], so it is not
+        // duplicated as a TextContent.
+        Assert.Empty(Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents);
+        Assert.Empty(Assert.IsType<ChatMessage>(chatMessage).Contents);
         Assert.Same(message, update.RawRepresentation);
         Assert.Same(message.Data, update.AdditionalProperties!["systemData"]);
         Assert.Equal(message.SessionId, update.AdditionalProperties["session_id"]);
         var mapped = Assert.Single(new ClaudePartialMessageMapper().Map(message));
-        Assert.Contains("status", Assert.IsType<TextContent>(Assert.Single(mapped.Contents)).Text);
+        Assert.Empty(mapped.Contents);
     }
 
     [Theory]
@@ -1351,27 +1326,15 @@ public class PartialMessageStreamingTests
         Assert.Equal("commit", message.Data["kind"].ToString());
         Assert.Equal("main", message.Data["branch"].ToString());
         Assert.Equal("/workspace/project", message.Data["cwd"].ToString());
-        var text = Assert
-            .IsType<TextContent>(
-                Assert.Single(
-                    Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents
-                )
-            )
-            .Text;
-        Assert.Contains("commit", text);
-        Assert.Equal(
-            text,
-            Assert
-                .IsType<TextContent>(
-                    Assert.Single(Assert.IsType<ChatMessage>(chatMessage).Contents)
-                )
-                .Text
-        );
+        // The system data is already exposed via AdditionalProperties["systemData"], so it is not
+        // duplicated as a TextContent.
+        Assert.Empty(Assert.IsType<Microsoft.Agents.AI.AgentResponseUpdate>(update).Contents);
+        Assert.Empty(Assert.IsType<ChatMessage>(chatMessage).Contents);
         Assert.Same(message, update.RawRepresentation);
         Assert.Same(message.Data, update.AdditionalProperties!["systemData"]);
         Assert.Equal(message.SessionId, update.AdditionalProperties["session_id"]);
         var mapped = Assert.Single(new ClaudePartialMessageMapper().Map(message));
-        Assert.Contains("commit", Assert.IsType<TextContent>(Assert.Single(mapped.Contents)).Text);
+        Assert.Empty(mapped.Contents);
     }
 
     private static SystemMessage VcsStateChangedMessage() =>
