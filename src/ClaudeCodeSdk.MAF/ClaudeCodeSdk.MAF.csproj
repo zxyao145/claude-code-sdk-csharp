@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="ClaudeCodeSdk.Tests" />
+    <InternalsVisibleTo Include="ClaudeCodeSdk.ReflectionFreeTests" />
     <PackageReference Include="Microsoft.Agents.AI" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>

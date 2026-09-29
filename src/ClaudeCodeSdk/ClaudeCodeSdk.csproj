@@ -9,6 +9,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="ClaudeCodeSdk.MAF" />
     <InternalsVisibleTo Include="ClaudeCodeSdk.Tests" />
+    <InternalsVisibleTo Include="ClaudeCodeSdk.ReflectionFreeTests" />
   </ItemGroup>
 
   <ItemGroup>
