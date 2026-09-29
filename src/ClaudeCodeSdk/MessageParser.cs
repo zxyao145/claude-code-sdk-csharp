@@ -440,7 +440,10 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return prop.Deserialize<Dictionary<string, object>>(JsonUtil.SNAKECASELOWER_OPTIONS)!;
+            return JsonUtil.Deserialize<Dictionary<string, object>>(
+                prop,
+                JsonUtil.SNAKECASELOWER_OPTIONS
+            )!;
         }
         throw new MessageParseException($"Missing required property: {propertyName}", element);
     }
@@ -449,7 +452,7 @@ internal static class MessageParser
     {
         if (element.TryGetProperty(propertyName, out var prop))
         {
-            return prop.Deserialize<T>(JsonUtil.SNAKECASELOWER_OPTIONS);
+            return JsonUtil.Deserialize<T>(prop, JsonUtil.SNAKECASELOWER_OPTIONS);
         }
         return default(T);
     }

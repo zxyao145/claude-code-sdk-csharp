@@ -27,10 +27,23 @@ internal static partial class AgentSessionJsonUtil
 
         if (JsonSerializer.IsReflectionEnabledByDefault)
         {
-            options.Converters.Add(new JsonStringEnumConverter());
+            AddStringEnumConverter(options);
         }
 
         ClaudeCodeAgentSession_OPTIONS = options;
+    }
+
+    // IsReflectionEnabledByDefault is a link-time constant that ILLink folds to false and
+    // dead-code-eliminates in trimmed/Native AOT publishes, but the build-time analyzer
+    // doesn't model that guard yet (dotnet/runtime#107440), hence the suppression.
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Guarded by JsonSerializer.IsReflectionEnabledByDefault; see comment above."
+    )]
+    private static void AddStringEnumConverter(JsonSerializerOptions options)
+    {
+        options.Converters.Add(new JsonStringEnumConverter());
     }
 
     // Keep in sync with CreateDefaultOptions above.
