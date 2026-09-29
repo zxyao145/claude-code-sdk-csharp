@@ -14,8 +14,10 @@ public record McpStdioServerConfig : IMcpServerConfig
     public required string Command { get; init; }
 
     [JsonPropertyName("args")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? Args { get; init; }
 
     [JsonPropertyName("env")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? Environment { get; init; }
 }

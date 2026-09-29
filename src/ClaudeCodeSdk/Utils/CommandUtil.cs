@@ -124,7 +124,16 @@ internal class CommandUtil
 
         if (options.McpServers != null && options.McpServers.Count > 0)
         {
-            cmd.AddRange(new[] { "--mcp-config", JsonUtil.Serialize(options.McpServers) });
+            // Boxed as object so each server is serialized by its runtime type, not by the
+            // IMcpServerConfig interface, which only exposes "type".
+            var servers = new Dictionary<string, object>();
+            foreach (var (name, config) in options.McpServers)
+                servers[name] = config;
+
+            var mcpConfig = new Dictionary<string, object> { ["mcpServers"] = servers };
+            cmd.AddRange(
+                new[] { "--mcp-config", JsonUtil.Serialize(mcpConfig) }
+            );
         }
 
         if (options.ExtraArgs != null)
