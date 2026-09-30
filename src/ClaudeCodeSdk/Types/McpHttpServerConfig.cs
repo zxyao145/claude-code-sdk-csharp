@@ -14,5 +14,6 @@ public record McpHttpServerConfig : IMcpServerConfig
     public required string Url { get; init; }
 
     [JsonPropertyName("headers")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
 }
