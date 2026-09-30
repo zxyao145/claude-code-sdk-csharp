@@ -50,7 +50,7 @@ public class StructuredOutputTests
         var message = Assert.IsType<ResultMessage>(MessageParser.ParseMessage(ResultJson(output)));
 
         // Act
-        var contents = await ProcessAsync(message, streaming, schemaEnabled: true);
+        var (contents, _) = await ProcessAsync(message, streaming, schemaEnabled: true);
 
         // Assert
         Assert.Equal(output, Assert.Single(contents.OfType<TextContent>()).Text);
@@ -69,7 +69,7 @@ public class StructuredOutputTests
         var message = Assert.IsType<ResultMessage>(MessageParser.ParseMessage(ResultJson(null)));
 
         // Act
-        var contents = await ProcessAsync(message, streaming, schemaEnabled: true);
+        var (contents, _) = await ProcessAsync(message, streaming, schemaEnabled: true);
 
         // Assert
         var error = Assert.Single(contents.OfType<ErrorContent>());
@@ -81,17 +81,21 @@ public class StructuredOutputTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ProcessMessages_WithoutSchema_PreservesPlainText(bool streaming)
+    public async Task ProcessMessages_WithoutSchema_ExposesPlainTextAsResultProperty(bool streaming)
     {
         // Arrange
         var message = Assert.IsType<ResultMessage>(MessageParser.ParseMessage(ResultJson(null)));
 
         // Act
-        var contents = await ProcessAsync(message, streaming, schemaEnabled: false);
+        var (contents, properties) = await ProcessAsync(message, streaming, schemaEnabled: false);
 
-        // Assert
-        Assert.Equal("plain text", Assert.Single(contents.OfType<TextContent>()).Text);
+        // Assert: "plain text" is the last assistant message's text, already carried by that
+        // message, so the final result text is exposed via AdditionalProperties, not a TextContent.
+        Assert.Empty(contents.OfType<TextContent>());
         Assert.Empty(contents.OfType<ErrorContent>());
+        var resultProperties = Assert.Single(properties);
+        Assert.Equal("plain text", resultProperties?["result"]);
+        Assert.Equal(false, resultProperties?["isError"]);
     }
 
     [Theory]
@@ -112,7 +116,7 @@ public class StructuredOutputTests
         };
 
         // Act
-        var contents = await ProcessAsync(message, streaming, schemaEnabled: true);
+        var (contents, _) = await ProcessAsync(message, streaming, schemaEnabled: true);
 
         // Assert
         Assert.Equal(
@@ -133,11 +137,10 @@ public class StructuredOutputTests
             }
             """;
 
-    private static async Task<List<AIContent>> ProcessAsync(
-        ResultMessage message,
-        bool streaming,
-        bool schemaEnabled
-    )
+    private static async Task<(
+        List<AIContent> Contents,
+        List<AdditionalPropertiesDictionary?> Properties
+    )> ProcessAsync(ResultMessage message, bool streaming, bool schemaEnabled)
     {
         // The constructor is lazy; these internal message-processing paths never create a CLI client.
         using var agent = new ClaudeCodeAIAgent(
@@ -156,17 +159,22 @@ public class StructuredOutputTests
                 session,
                 []
             );
-            return response.Messages.SelectMany(item => item.Contents).ToList();
+            return (
+                response.Messages.SelectMany(item => item.Contents).ToList(),
+                response.Messages.Select(item => item.AdditionalProperties).ToList()
+            );
         }
 
         var contents = new List<AIContent>();
+        var properties = new List<AdditionalPropertiesDictionary?>();
         await foreach (
             var update in agent.ProcessStreamingMessagesAsync(Messages(message), session, [])
         )
         {
             contents.AddRange(update.Contents);
+            properties.Add(update.AdditionalProperties);
         }
-        return contents;
+        return (contents, properties);
     }
 
     private static async IAsyncEnumerable<IMessage> Messages(IMessage message)

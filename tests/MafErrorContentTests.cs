@@ -246,13 +246,14 @@ public class MafErrorContentTests
     [Fact]
     public void ToChatMessage_IMessageSystem_ReturnsSystemMessage()
     {
-        IMessage message = new SystemMessage
+        var systemMessage = new SystemMessage
         {
             Id = "system-1",
             Subtype = "init",
             SessionId = "session-1",
             Data = new Dictionary<string, object> { ["status"] = "ready" },
         };
+        IMessage message = systemMessage;
 
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
@@ -260,10 +261,10 @@ public class MafErrorContentTests
         Assert.Equal("claude-code", chatMessage.AuthorName);
         Assert.False(chatMessage.AdditionalProperties!.ContainsKey("agentName"));
         Assert.Equal(string.Empty, chatMessage.AdditionalProperties["modelName"]);
-        Assert.Contains(
-            "ready",
-            Assert.IsType<TextContent>(Assert.Single(chatMessage.Contents)).Text
-        );
+        // The system data is already exposed via AdditionalProperties["systemData"], so it is
+        // not duplicated as a TextContent.
+        Assert.Empty(chatMessage.Contents);
+        Assert.Same(systemMessage.Data, chatMessage.AdditionalProperties["systemData"]);
         Assert.Equal("session-1", chatMessage.AdditionalProperties["session_id"]);
     }
 
@@ -368,7 +369,7 @@ public class MafErrorContentTests
     }
 
     [Fact]
-    public void ToChatMessage_IMessageSuccessfulResult_ReturnsTextAndUsage()
+    public void ToChatMessage_IMessageSuccessfulResult_ExposesResultPropertyAndUsage()
     {
         IMessage message = CreateResultMessage(
             "done",
@@ -382,11 +383,11 @@ public class MafErrorContentTests
         var chatMessage = Assert.IsType<ChatMessage>(message.ToChatMessage());
 
         Assert.Equal(ChatRole.Assistant, chatMessage.Role);
-        Assert.Collection(
-            chatMessage.Contents,
-            content => Assert.Equal("done", Assert.IsType<TextContent>(content).Text),
-            content => Assert.IsType<UsageContent>(content)
-        );
+        // "done" is the last assistant message's text, which that message already carries, so
+        // the result text is exposed via AdditionalProperties instead of a TextContent.
+        Assert.Collection(chatMessage.Contents, content => Assert.IsType<UsageContent>(content));
+        Assert.Equal("done", chatMessage.AdditionalProperties!["result"]);
+        Assert.Equal(false, chatMessage.AdditionalProperties["isError"]);
     }
 
     [Fact]
