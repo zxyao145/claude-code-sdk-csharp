@@ -86,10 +86,10 @@ public class JsonPinningTests
         };
 
         var json = GetMcpConfigArgument(options);
-        // The dictionary value is declared as IMcpServerConfig, so System.Text.Json
-        // serializes only the interface's own member ("type"); this is existing
-        // behavior that this test pins, not a bug introduced by the AOT rewrite.
-        Assert.Equal("{\"srv\":{\"type\":\"http\"}}", json);
+        Assert.Equal(
+            "{\"mcpServers\":{\"srv\":{\"type\":\"http\",\"url\":\"https://example.com\",\"headers\":{\"X-Test\":\"1\"}}}}",
+            json
+        );
     }
 
     [Fact]
@@ -108,7 +108,10 @@ public class JsonPinningTests
         };
 
         var json = GetMcpConfigArgument(options);
-        Assert.Equal("{\"srv\":{\"type\":\"sse\"}}", json);
+        Assert.Equal(
+            "{\"mcpServers\":{\"srv\":{\"type\":\"sse\",\"url\":\"https://example.com/sse\",\"headers\":{\"X-Test\":\"1\"}}}}",
+            json
+        );
     }
 
     [Fact]
@@ -128,7 +131,10 @@ public class JsonPinningTests
         };
 
         var json = GetMcpConfigArgument(options);
-        Assert.Equal("{\"srv\":{\"type\":\"stdio\"}}", json);
+        Assert.Equal(
+            "{\"mcpServers\":{\"srv\":{\"type\":\"stdio\",\"command\":\"node\",\"args\":[\"server.js\"],\"env\":{\"KEY\":\"value\"}}}}",
+            json
+        );
     }
 
     private static string GetMcpConfigArgument(ClaudeCodeOptions options)

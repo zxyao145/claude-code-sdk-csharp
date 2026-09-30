@@ -76,7 +76,10 @@ public class ReflectionFreeTests
 
     [Theory]
     [MemberData(nameof(McpServerConfigs))]
-    public void BuildCommand_McpConfig_Succeeds(IMcpServerConfig config)
+    public void BuildCommand_McpConfig_WritesExpectedJson(
+        IMcpServerConfig config,
+        string expectedJson
+    )
     {
         var options = new ClaudeCodeOptions
         {
@@ -85,14 +88,56 @@ public class ReflectionFreeTests
 
         var command = CommandUtil.BuildCommand(options, isStreaming: true, prompt: string.Empty);
 
-        Assert.Contains("--mcp-config", command);
+        var index = command.IndexOf("--mcp-config");
+        Assert.True(index >= 0);
+        Assert.Equal(expectedJson, command[index + 1]);
     }
 
     public static IEnumerable<object[]> McpServerConfigs()
     {
-        yield return [new McpHttpServerConfig { Url = "https://example.com" }];
-        yield return [new McpSSEServerConfig { Url = "https://example.com/sse" }];
-        yield return [new McpStdioServerConfig { Command = "node" }];
+        yield return
+        [
+            new McpHttpServerConfig
+            {
+                Url = "https://example.com",
+                Headers = new Dictionary<string, string> { ["X-Test"] = "1" },
+            },
+            "{\"mcpServers\":{\"srv\":{\"type\":\"http\",\"url\":\"https://example.com\",\"headers\":{\"X-Test\":\"1\"}}}}",
+        ];
+        yield return
+        [
+            new McpSSEServerConfig
+            {
+                Url = "https://example.com/sse",
+                Headers = new Dictionary<string, string> { ["X-Test"] = "1" },
+            },
+            "{\"mcpServers\":{\"srv\":{\"type\":\"sse\",\"url\":\"https://example.com/sse\",\"headers\":{\"X-Test\":\"1\"}}}}",
+        ];
+        yield return
+        [
+            new McpStdioServerConfig
+            {
+                Command = "node",
+                Args = new[] { "server.js" },
+                Environment = new Dictionary<string, string> { ["KEY"] = "value" },
+            },
+            "{\"mcpServers\":{\"srv\":{\"type\":\"stdio\",\"command\":\"node\",\"args\":[\"server.js\"],\"env\":{\"KEY\":\"value\"}}}}",
+        ];
+        yield return
+        [
+            new McpHttpServerConfig { Url = "https://example.com" },
+            "{\"mcpServers\":{\"srv\":{\"type\":\"http\",\"url\":\"https://example.com\"}}}",
+        ];
+        yield return
+        [
+            new McpSSEServerConfig { Url = "https://example.com/sse" },
+            "{\"mcpServers\":{\"srv\":{\"type\":\"sse\",\"url\":\"https://example.com/sse\"}}}",
+        ];
+        yield return
+        [
+            new McpStdioServerConfig { Command = "node" },
+            "{\"mcpServers\":{\"srv\":{\"type\":\"stdio\",\"command\":\"node\"}}}",
+        ];
     }
 
     [Fact]
