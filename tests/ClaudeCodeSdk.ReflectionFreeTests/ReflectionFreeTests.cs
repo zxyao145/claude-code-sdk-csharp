@@ -36,6 +36,71 @@ public class ReflectionFreeTests
         Assert.Contains("\"type\":\"user\"", json, StringComparison.Ordinal);
     }
 
+    public static TheoryData<string, object> ContentArrays()
+    {
+        Dictionary<string, object> Block() =>
+            new() { ["type"] = "text", ["text"] = "hello" };
+        return new TheoryData<string, object>
+        {
+            { "object[]", new object[] { Block() } },
+            { "Dictionary[]", new Dictionary<string, object>[] { Block() } },
+            { "List<object>", new List<object> { Block() } },
+            { "List<Dictionary>", new List<Dictionary<string, object>> { Block() } },
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(ContentArrays))]
+    public async Task WriteJsonLineToAsync_ContentBlocksInCollection_WritesExpectedJson(
+        string kind,
+        object content
+    )
+    {
+        var message = new Dictionary<string, object>
+        {
+            ["type"] = "user",
+            ["message"] = new Dictionary<string, object> { ["role"] = "user", ["content"] = content },
+            ["session_id"] = "default",
+        };
+
+        using var stream = new MemoryStream();
+        await ClaudeProcess.WriteJsonLineToAsync(
+            stream,
+            message,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]},\"session_id\":\"default\"}\n",
+            Encoding.UTF8.GetString(stream.ToArray())
+        );
+        Assert.NotEmpty(kind);
+    }
+
+    [Fact]
+    public async Task WriteJsonLineToAsync_NestedArraysInsideBlocks_WritesExpectedJson()
+    {
+        var block = new Dictionary<string, object>
+        {
+            ["type"] = "tool_result",
+            ["content"] = new object[] { new Dictionary<string, object>[] { new() { ["a"] = 1 } } },
+            ["tags"] = new List<object> { "x", 2L, 1.5, true },
+        };
+        var message = new Dictionary<string, object> { ["content"] = new object[] { block } };
+
+        using var stream = new MemoryStream();
+        await ClaudeProcess.WriteJsonLineToAsync(
+            stream,
+            message,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(
+            "{\"content\":[{\"type\":\"tool_result\",\"content\":[[{\"a\":1}]],\"tags\":[\"x\",2,1.5,true]}]}\n",
+            Encoding.UTF8.GetString(stream.ToArray())
+        );
+    }
+
     [Fact]
     public async Task ControlProtocolHandler_CanUseToolDeny_WritesResponse()
     {

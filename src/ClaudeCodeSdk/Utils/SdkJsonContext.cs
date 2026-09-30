@@ -17,6 +17,8 @@ namespace ClaudeCodeSdk.Utils;
 [JsonSerializable(typeof(IReadOnlyDictionary<string, object>))]
 [JsonSerializable(typeof(List<Dictionary<string, object>>))]
 [JsonSerializable(typeof(List<object>))]
+[JsonSerializable(typeof(object[]))]
+[JsonSerializable(typeof(Dictionary<string, object>[]))]
 [JsonSerializable(typeof(ReadOnlyMemory<byte>))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(object))]
