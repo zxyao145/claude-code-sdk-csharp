@@ -1,5 +1,4 @@
 ﻿using ClaudeCodeSdk.Types;
-using ClaudeCodeSdk.Utils;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -19,12 +18,11 @@ internal static partial class IMessageExtension
 
         if (claudeMessage is SystemMessage systemMessage)
         {
-            AIContent content = systemMessage.Subtype switch
-            {
-                "api_retry" => new ErrorContent(GetApiRetryErrorMessage(systemMessage)),
-                // init, status, hook_*, task_* ...
-                _ => new TextContent(JsonUtil.Serialize(systemMessage.Data)),
-            };
+            // init, status, hook_*, task_* ... already carried in AdditionalProperties["systemData"].
+            List<AIContent> systemContents =
+                systemMessage.Subtype == "api_retry"
+                    ? [new ErrorContent(GetApiRetryErrorMessage(systemMessage))]
+                    : [];
 
             return new AgentResponseUpdate
             {
@@ -43,7 +41,7 @@ internal static partial class IMessageExtension
                     },
                 },
                 RawRepresentation = systemMessage,
-                Contents = [content],
+                Contents = systemContents,
             };
         }
 
@@ -91,6 +89,7 @@ internal static partial class IMessageExtension
             List<AIContent> contents = new List<AIContent>();
 
             string? result = resultMessage.Result;
+            bool exposeResultAsProperty = false;
             if (resultMessage.IsError)
             {
                 contents.Add(
@@ -111,10 +110,19 @@ internal static partial class IMessageExtension
             {
                 contents.Add(new TextContent(output.GetRawText()));
             }
-            else if (!string.IsNullOrWhiteSpace(result))
+            else if (resultMessage.IsIntermediate)
             {
-                var textContent = new TextContent(result);
-                contents.Add(textContent);
+                if (!string.IsNullOrWhiteSpace(result))
+                {
+                    contents.Add(new TextContent(result));
+                }
+            }
+            else
+            {
+                // The CLI's `result` text is the last assistant message's text, which that
+                // AssistantMessage already carries; expose it via AdditionalProperties instead
+                // of duplicating it as Contents.
+                exposeResultAsProperty = true;
             }
 
             UsageDetails? usageDetails = ConvertUsageDetails(resultMessage);
@@ -123,32 +131,36 @@ internal static partial class IMessageExtension
                 contents.Add(new UsageContent(usageDetails));
             }
 
-            if (contents.Count > 0)
+            var additionalProperties = new AdditionalPropertiesDictionary
             {
-                return new AgentResponseUpdate
+                // Intermediate results are assistant progress in chat presentation;
+                // the raw SDK stream still exposes the original ResultMessage.
+                // For example, background agent execution status notification.
                 {
-                    MessageId = claudeMessage.Id,
-                    Role = ChatRole.Assistant,
-                    AuthorName = AgentName,
-                    AdditionalProperties = new AdditionalPropertiesDictionary
-                    {
-                        // Intermediate results are assistant progress in chat presentation;
-                        // the raw SDK stream still exposes the original ResultMessage.
-                        // For example, background agent execution status notification.
-                        {
-                            "type",
-                            resultMessage.IsIntermediate
-                                ? MessageType.Assistant.Value
-                                : claudeMessage.Type.Value
-                        },
-                        { "isIntermediateResult", resultMessage.IsIntermediate },
-                        { "subtype", resultMessage.Subtype },
-                        { "totalCostUsd", resultMessage.TotalCostUsd },
-                        { ModelNamePropertyName, string.Empty },
-                    },
-                    Contents = contents,
-                };
+                    "type",
+                    resultMessage.IsIntermediate
+                        ? MessageType.Assistant.Value
+                        : claudeMessage.Type.Value
+                },
+                { "isIntermediateResult", resultMessage.IsIntermediate },
+                { "subtype", resultMessage.Subtype },
+                { "totalCostUsd", resultMessage.TotalCostUsd },
+                { "isError", resultMessage.IsError },
+                { ModelNamePropertyName, string.Empty },
+            };
+            if (exposeResultAsProperty)
+            {
+                additionalProperties["result"] = result;
             }
+
+            return new AgentResponseUpdate
+            {
+                MessageId = claudeMessage.Id,
+                Role = ChatRole.Assistant,
+                AuthorName = AgentName,
+                AdditionalProperties = additionalProperties,
+                Contents = contents,
+            };
         }
 
         return null;
