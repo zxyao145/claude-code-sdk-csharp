@@ -2,13 +2,10 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- The point of this project: fail fast on any reflection-based JSON call, the
+         same way a native AOT publish or a trimmed app would. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
-
-  <!-- ClaudeCodeSdk.ReflectionFreeTests is a separate project nested in this folder;
-       exclude its sources so the default glob below doesn't compile them in twice. -->
-  <ItemGroup>
-    <Compile Remove="ClaudeCodeSdk.ReflectionFreeTests\**\*.cs" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -21,11 +18,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Moq" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\ClaudeCodeSdk.MAF\ClaudeCodeSdk.MAF.csproj" />
-    <ProjectReference Include="..\src\ClaudeCodeSdk\ClaudeCodeSdk.csproj" />
+    <ProjectReference Include="..\..\src\ClaudeCodeSdk.MAF\ClaudeCodeSdk.MAF.csproj" />
+    <ProjectReference Include="..\..\src\ClaudeCodeSdk\ClaudeCodeSdk.csproj" />
   </ItemGroup>
 </Project>

@@ -377,7 +377,7 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         await JsonSerializer.SerializeAsync(
             stream,
             message,
-            JsonUtil.CAMELCASE_OPTIONS,
+            JsonUtil.GetTypeInfo<Dictionary<string, object>>(JsonUtil.CAMELCASE_OPTIONS),
             cancellationToken
         );
         await stream.WriteAsync(NewLine, cancellationToken);
