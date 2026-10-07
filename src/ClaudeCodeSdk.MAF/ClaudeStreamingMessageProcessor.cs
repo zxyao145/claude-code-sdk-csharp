@@ -22,7 +22,9 @@ internal sealed class ClaudeStreamingMessageProcessor
         _unpersistedRequestMessages = requestMessages;
         _mapper =
             enableHistoryPersistence || enableMessageMapping
-                ? new ClaudePartialMessageMapper()
+                ? new ClaudePartialMessageMapper(
+                    includeResultMessageInContents: enableMessageMapping
+                )
                 : null;
         _historyAccumulator = enableHistoryPersistence
             ? new ClaudeStreamingHistoryAccumulator()

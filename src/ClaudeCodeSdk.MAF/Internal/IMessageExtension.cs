@@ -9,7 +9,10 @@ internal static partial class IMessageExtension
     internal const string AgentName = "claude-code";
     internal const string ModelNamePropertyName = "modelName";
 
-    public static AgentResponseUpdate? ToAgentRunResponseUpdate(this IMessage claudeMessage)
+    public static AgentResponseUpdate? ToAgentRunResponseUpdate(
+        this IMessage claudeMessage,
+        bool includeResultMessageInContents = false
+    )
     {
         if (claudeMessage is AssistantMessage assistantMsg && assistantMsg.Content.Count > 0)
         {
@@ -110,7 +113,7 @@ internal static partial class IMessageExtension
             {
                 contents.Add(new TextContent(output.GetRawText()));
             }
-            else if (resultMessage.IsIntermediate)
+            else if (resultMessage.IsIntermediate || includeResultMessageInContents)
             {
                 if (!string.IsNullOrWhiteSpace(result))
                 {
@@ -119,7 +122,7 @@ internal static partial class IMessageExtension
             }
             else
             {
-                // The CLI's `result` text is the last assistant message's text, which that
+                // For Non-streaming, the CLI's `result` text is the last assistant message's text, which that
                 // AssistantMessage already carries; expose it via AdditionalProperties instead
                 // of duplicating it as Contents.
                 exposeResultAsProperty = true;

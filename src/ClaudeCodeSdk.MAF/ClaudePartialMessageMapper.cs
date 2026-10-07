@@ -9,6 +9,7 @@ namespace ClaudeCodeSdk.MAF;
 
 internal sealed class ClaudePartialMessageMapper
 {
+    private readonly bool _includeResultMessageInContents;
     private readonly string _responseId = Guid.NewGuid().ToString("N");
     private readonly Dictionary<StreamKey, MessageState> _activeMessages = [];
     private readonly Dictionary<string, MessageState> _messagesById = new(StringComparer.Ordinal);
@@ -16,6 +17,26 @@ internal sealed class ClaudePartialMessageMapper
     private readonly HashSet<string> _assistantSnapshotMessageIds = new(StringComparer.Ordinal);
     private string? _lastStoppedMessageId;
     private string? _lastAssistantMessageId;
+
+    /// <summary>
+    /// 创建消息映射器，按调用模式处理最终结果正文。
+    /// Creates a message mapper that handles final result text for the caller's response mode.
+    /// </summary>
+    /// <param name="includeResultMessageInContents">
+    /// 控制成功且没有结构化输出的最终 ResultMessage 是否将正文输出到 Contents。
+    /// Controls whether successful final ResultMessage text without structured output is included in Contents.
+    ///
+    /// RunStreamingAsync 使用 true（默认），将非空白正文作为 TextContent 输出并保留在历史记录中。
+    /// RunStreamingAsync uses true (the default) to include nonblank text in TextContent and history.
+    ///
+    /// RunAsync 的历史记录映射使用 false，将正文保存在 AdditionalProperties["result"]，防止聚合历史时重复助手正文。
+    /// RunAsync history mapping uses false to store text in AdditionalProperties["result"]
+    /// and prevent duplicate assistant text when aggregating history.
+    /// </param>
+    public ClaudePartialMessageMapper(bool includeResultMessageInContents = true)
+    {
+        _includeResultMessageInContents = includeResultMessageInContents;
+    }
 
     public IEnumerable<AgentResponseUpdate> Map(IMessage message)
     {
@@ -39,7 +60,7 @@ internal sealed class ClaudePartialMessageMapper
             yield break;
         }
 
-        if (message.ToAgentRunResponseUpdate() is { } defaultUpdate)
+        if (message.ToAgentRunResponseUpdate(_includeResultMessageInContents) is { } defaultUpdate)
         {
             defaultUpdate.ResponseId ??= _responseId;
             yield return defaultUpdate;
