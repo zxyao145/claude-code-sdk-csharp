@@ -81,7 +81,9 @@ public class StructuredOutputTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ProcessMessages_WithoutSchema_ExposesPlainTextAsResultProperty(bool streaming)
+    public async Task ProcessMessages_WithoutSchema_PreservesResultTextForResponseMode(
+        bool streaming
+    )
     {
         // Arrange
         var message = Assert.IsType<ResultMessage>(MessageParser.ParseMessage(ResultJson(null)));
@@ -89,13 +91,23 @@ public class StructuredOutputTests
         // Act
         var (contents, properties) = await ProcessAsync(message, streaming, schemaEnabled: false);
 
-        // Assert: "plain text" is the last assistant message's text, already carried by that
-        // message, so the final result text is exposed via AdditionalProperties, not a TextContent.
-        Assert.Empty(contents.OfType<TextContent>());
+        // 验证每种响应模式的最终结果正文及元数据。
+        // Assert the final result text and metadata for each response mode.
         Assert.Empty(contents.OfType<ErrorContent>());
+        Assert.Single(contents.OfType<UsageContent>());
         var resultProperties = Assert.Single(properties);
-        Assert.Equal("plain text", resultProperties?["result"]);
-        Assert.Equal(false, resultProperties?["isError"]);
+        Assert.NotNull(resultProperties);
+        if (streaming)
+        {
+            Assert.Equal("plain text", Assert.Single(contents.OfType<TextContent>()).Text);
+            Assert.False(resultProperties.ContainsKey("result"));
+        }
+        else
+        {
+            Assert.Empty(contents.OfType<TextContent>());
+            Assert.Equal("plain text", resultProperties["result"]);
+        }
+        Assert.Equal(false, resultProperties["isError"]);
     }
 
     [Theory]

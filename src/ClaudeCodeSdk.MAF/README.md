@@ -551,9 +551,9 @@ The integration automatically converts between Claude Code content blocks and MA
 - A new client is created when switching sessions or after disconnect/dispose
 
 ### Message Processing
-- **RunAsync()** - Collects all messages through stream completion, including intermediate results, and returns the complete response
+- **RunAsync()** - Collects all messages through stream completion, including intermediate results, and returns the complete response. A successful final result without structured output exposes its text through `AdditionalProperties["result"]`; `AgentResponse.Text` includes the assistant response once.
 - Intermediate results map to assistant messages (`type=assistant`, `isIntermediateResult=true`) for ordinary progress presentation. Final results retain `type=result`. Streaming updates and persisted history share this mapping; the raw SDK stream still forwards every `ResultMessage`.
-- **RunStreamingAsync()** - Yields `AgentResponseUpdate` chunks as content arrives
+- **RunStreamingAsync()** - Yields `AgentResponseUpdate` chunks as content arrives. A successful final result without structured output includes its text as `TextContent` in the update with `type=result`, along with its usage and metadata. Persisted history follows the caller's response mode.
 - Request content comes from the first user message; text and image `DataContent` are supported
 
 ## Important Notes
