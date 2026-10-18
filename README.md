@@ -398,6 +398,20 @@ Ensure Claude Code CLI is installed globally:
 npm install -g @anthropic-ai/claude-code
 ```
 
+The SDK searches `PATH` first, then common install locations, including `~/.local/bin`, `/usr/local/bin`, and `/opt/homebrew/bin`. If discovery fails, the error reports the effective `PATH` and the fallback search locations. Processes launched outside a login shell, such as a macOS LaunchAgent, often receive a minimal `PATH`. For custom installations, add the CLI directory to the `PATH` of the process running the SDK.
+
+Native installations do not require Node.js. On macOS, you can install the native CLI with Homebrew:
+
+```bash
+brew install --cask claude-code
+```
+
+See the [official installation instructions](https://code.claude.com/docs/en/setup) for other platforms and installation methods.
+
+### "env: node: No such file or directory"
+
+If a script-based installation reports this error, ensure `node` is available on the `PATH` of the process running the SDK, or switch to a native installation as described above.
+
 ### Authentication Errors
 Set your API key:
 ```bash

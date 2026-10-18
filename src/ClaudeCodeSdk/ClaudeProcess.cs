@@ -466,28 +466,20 @@ internal sealed class ClaudeProcess : IAsyncDisposable
         return startInfo;
     }
 
-    private static string FindClaudeCli()
+    private static string FindClaudeCli() =>
+        FindClaudeCli(Environment.GetEnvironmentVariable("PATH") ?? "", DefaultFallbackLocations());
+
+    internal static string FindClaudeCli(string pathEnv, IReadOnlyList<string> fallbackLocations)
     {
         // Try PATH first
-        var cli = Which("claude");
+        var cli = Which("claude", pathEnv);
         if (cli != null)
             return cli;
 
         // Try common installation locations
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var isWindows = OperatingSystem.IsWindows();
 
-        var locations = new[]
-        {
-            "claude",
-            Path.Combine(home, ".npm-global", "bin", "claude"),
-            Path.Combine("/usr/local/bin", "claude"),
-            Path.Combine(home, ".local", "bin", "claude"),
-            Path.Combine(home, "node_modules", ".bin", "claude"),
-            Path.Combine(home, ".yarn", "bin", "claude"),
-        };
-
-        foreach (var path in locations)
+        foreach (var path in fallbackLocations)
         {
             if (File.Exists(path))
                 return path;
@@ -496,29 +488,34 @@ internal sealed class ClaudeProcess : IAsyncDisposable
                 return path + ".exe";
         }
 
-        // Check if Node.js is installed
-        if (Which("node") == null)
-        {
-            throw new CLINotFoundException(
-                "Claude Code requires Node.js, which is not installed.\n\n"
-                    + "Install Node.js from: https://nodejs.org/\n\n"
-                    + "After installing Node.js, install Claude Code:\n"
-                    + "  npm install -g @anthropic-ai/claude-code"
-            );
-        }
-
         // CLI not found
         throw new CLINotFoundException(
-            "Claude Code not found. Install with:\n"
-                + "  npm install -g @anthropic-ai/claude-code\n\n"
-                + "If already installed locally, try:\n"
-                + "  export PATH=\"$HOME/node_modules/.bin:$PATH\""
+            $"Claude Code CLI not found. \"claude\" was not found on PATH ({pathEnv}) "
+                + $"or in: {string.Join(", ", fallbackLocations.Select(Path.GetFullPath))}.\n"
+                + "Install Claude Code CLI, or add its directory to PATH."
         );
     }
 
-    private static string? Which(string command)
+    // Processes started outside a login shell (e.g. a macOS LaunchAgent) get a minimal PATH,
+    // so well-known install directories are probed explicitly.
+    internal static IReadOnlyList<string> DefaultFallbackLocations()
     {
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        return
+        [
+            "claude",
+            Path.Combine(home, ".npm-global", "bin", "claude"),
+            Path.Combine("/usr/local/bin", "claude"),
+            Path.Combine("/opt/homebrew/bin", "claude"),
+            Path.Combine(home, ".local", "bin", "claude"),
+            Path.Combine(home, "node_modules", ".bin", "claude"),
+            Path.Combine(home, ".yarn", "bin", "claude"),
+        ];
+    }
+
+    private static string? Which(string command, string pathEnv)
+    {
         var paths = pathEnv.Split(Path.PathSeparator);
         var isWindows = OperatingSystem.IsWindows();
 

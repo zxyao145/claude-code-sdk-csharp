@@ -928,6 +928,10 @@ dotnet add package ClaudeCodeSdk.MAF
 npm install -g @anthropic-ai/claude-code
 ```
 
+The SDK searches `PATH` first, then common install locations, including `~/.local/bin`, `/usr/local/bin`, and `/opt/homebrew/bin`. The exception reports the effective `PATH` and the fallback paths checked. For custom installations, add the CLI directory to the `PATH` of the process running the SDK; services and macOS LaunchAgents may receive a different `PATH` from your terminal.
+
+Native installations do not require Node.js. See the [official installation instructions](https://code.claude.com/docs/en/setup) for native installation options. If a script-based installation fails with `env: node: No such file or directory`, make `node` available on that process's `PATH`, or use a native installation.
+
 ### Connection Issues
 
 **Error**: `CLIConnectionException`
